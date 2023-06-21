@@ -14,7 +14,11 @@ public:
 
   ~PieceHelper() = default;
 
-  virtual void generateMoves(const boardUtil::BoardState& bs, boardUtil::MoveList&);
+  template<bool whiteTurn, bool pinnedSquares>
+  constexpr void generateMoves(const boardUtil::BoardState& bs, boardUtil::MoveList&);
+
+  template<bool whiteTurn, bool pinnedSquares>
+  constexpr void generateAttacks(const boardUtil::BoardState& bs, boardUtil::MoveList&);
 
 private:
 };

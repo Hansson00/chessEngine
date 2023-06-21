@@ -1,8 +1,10 @@
 #pragma once
 
-namespace piece {
+#include "slider.h"
+#include "pieceHelper.h"
 
-class Bishop
+namespace piece {
+class Bishop : public helper::PieceHelper, private helper::Slider
 {
 };
 

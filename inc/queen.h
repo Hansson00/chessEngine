@@ -1,8 +1,11 @@
 #pragma once
 
+#include "slider.h"
+#include "pieceHelper.h"
+
 namespace piece {
 
-class Queen
+class Queen : public helper::PieceHelper, private helper::Slider
 {
 };
 

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "pieceHelper.h"
+
 namespace piece {
 
-class Pawn
+class Pawn : public helper::PieceHelper
 {
 };
 

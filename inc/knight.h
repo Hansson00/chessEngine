@@ -1,8 +1,10 @@
 #pragma once
 
+#include "pieceHelper.h"
+
 namespace piece {
 
-class Knight
+class Knight : public helper::PieceHelper
 {
 };
 

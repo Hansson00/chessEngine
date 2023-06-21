@@ -1,9 +1,11 @@
 
 #pragma once
 
-#include <memory>
-class engine
+class Engine
 {
-  engine() = default;
+public:
+  Engine() = default;
+  ~Engine() = default;
 
+  void run();
 };

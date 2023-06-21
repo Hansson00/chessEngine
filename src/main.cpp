@@ -1,16 +1,10 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include "../inc/engine.h"
+#include "../inc/Engine.h"
 
 int main()
 {
-  std::vector<std::string> msg {"Hello", "C++", "World", "from", "VS Code", "and the C++ extension!"};
-
-  for (const std::string& word : msg)
-  {
-    std::cout << word << " ";
-  }
-
-  std::cout << std::endl;
+  Engine engine = Engine();
+  engine.run();
 }

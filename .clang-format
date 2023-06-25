@@ -52,7 +52,7 @@ BraceWrapping:
 
   AfterFunction:   true
 
-  AfterNamespace:  false
+  AfterNamespace:  true
 
   AfterObjCDeclaration: true
 

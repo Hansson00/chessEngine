@@ -3,7 +3,8 @@
 #include "slider.h"
 #include "pieceHelper.h"
 
-namespace piece {
+namespace piece
+{
 
 class Rook : public helper::PieceHelper, private helper::Slider
 {

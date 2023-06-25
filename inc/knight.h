@@ -2,7 +2,8 @@
 
 #include "pieceHelper.h"
 
-namespace piece {
+namespace piece
+{
 
 class Knight : public helper::PieceHelper
 {

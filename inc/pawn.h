@@ -2,7 +2,8 @@
 
 #include "pieceHelper.h"
 
-namespace piece {
+namespace piece
+{
 
 class Pawn : public helper::PieceHelper
 {

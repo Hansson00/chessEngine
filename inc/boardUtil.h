@@ -2,8 +2,12 @@
 #pragma once
 #include <cinttypes>
 
-namespace piece {
-namespace boardUtil {
+namespace piece
+{
+namespace boardUtil
+{
+
+const static char piece[12] = {'Q', 'R', 'B', 'N', 'P', 'q', 'r', 'b', 'n', 'p'};
 
 #define ISCAPTURE(board, destination) (static_cast<uint32_t>(boardUtil::MoveListType::CAPTURE) * ((board & (1ULL << destination)) != 0))
 
@@ -57,6 +61,33 @@ enum class pieceType
   Knight,
   Pawn,
   King
+};
+
+enum moveModifiers
+{
+  FROM = 63,
+  TO = 4032,
+  FROM_TO = 4095,
+  /* Attack piece board */
+  ATTACKERS = 258048,
+  king = 4096,
+  queen = 8192,
+  rook = 16384,
+  bishop = 32768,
+  knight = 65536,
+  pawn = 131072,
+
+  WHITE_TO_MOVE = 262144,
+  EN_PESSANT_CAP = 524288,
+  CASTLE_KING = 1048576,
+  CASTLE_QUEEN = 2097152,
+  CAPTURE = 4194304,
+  DPUSH = 8388608,
+  PROMO_QUEEN = 16777216,
+  PROMO_ROOK = 33554432,
+  PROMO_BISHOP = 67108864,
+  PROMO_KNIGHT = 134217728,
+  PROMO = 251658240
 };
 
 constexpr uint64_t files[8] = {0x0101010101010101ULL, 0x0202020202020202ULL, 0x0404040404040404ULL,

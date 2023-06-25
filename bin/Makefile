@@ -1,11 +1,24 @@
 
+# Compiler
+cc = /mnt/c/msys64/mingw64/bin/g++.exe
+
+# Source map
 src = ../src/
 
-file = $(src)main.cpp
-file += $(src)engine.cpp
+# Source files
+file = $(src)*.cpp
 
+# Includes
+inc = -I
+inc += ../inc/
+# $(inc)
+
+# Compile command
 main:
-	g++ -o main.out $(file)
+	$(cc) $(file) -o main
+
+clean:
+	rm *.exe
 
 
 

@@ -4,8 +4,10 @@
 #include <cinttypes>
 #include "boardUtil.h"
 
-namespace piece {
-namespace helper {
+namespace piece
+{
+namespace helper
+{
 
 class Slider
 {

@@ -2,8 +2,10 @@
 #include "boardUtil.h"
 #include <cinttypes>
 
-namespace piece {
-namespace helper {
+namespace piece
+{
+namespace helper
+{
 
 class PieceHelper
 {

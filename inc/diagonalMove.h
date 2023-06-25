@@ -1,8 +1,10 @@
 #pragma once
 #include <cinttypes>
 
-namespace piece {
-namespace helper {
+namespace piece
+{
+namespace helper
+{
 
 class DiagonalMove
 {

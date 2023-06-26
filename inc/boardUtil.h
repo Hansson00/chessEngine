@@ -4,12 +4,14 @@
 
 namespace piece
 {
-namespace boardUtil
-{
+
+constexpr auto PIECE_OFFSET = 5;
+#define GETPIECES(piece) bs.pieceBoards[piece + PIECE_OFFSET * whiteTurn]
+
+constexpr uint64_t CASTELING_K_CHECK = 1 << 4;
+constexpr uint64_t CASTELING_Q_CHECK = 1 << 5;
 
 const static char piece[12] = {'Q', 'R', 'B', 'N', 'P', 'q', 'r', 'b', 'n', 'p'};
-
-#define ISCAPTURE(board, destination) (static_cast<uint32_t>(boardUtil::MoveListType::CAPTURE) * ((board & (1ULL << destination)) != 0))
 
 enum class MoveListType
 {
@@ -102,5 +104,4 @@ constexpr uint64_t anti_diagonals[15] = {0x1ULL, 0x0102ULL, 0x010204ULL, 0x01020
                                          0x0102040810204080ULL, 0x0204081020408000ULL, 0x0408102040800000ULL, 0x0810204080000000ULL, 0x1020408000000000ULL,
                                          0x2040800000000000ULL, 0x4080000000000000ULL, 0x8000000000000000ULL};
 
-}  // namespace boardUtil
 }  // namespace piece

@@ -1,8 +1,9 @@
 #include "../inc/engine.h"
+#include "../inc/gui.h"
 
 #include <iostream>
 
 void Engine::run()
 {
-  std::cout << "Hello" << std::endl;
+  GUI::m_setup();
 }

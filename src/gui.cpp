@@ -2,11 +2,37 @@
 #include <iostream>
 #include "intrin.h"
 
-#pragma intrinsic()
-char m_boardRepresentation[9][28];
+char m_boardRepresentation[9][28] = {};
 
 namespace GUI
 {
+
+void m_setup()
+{
+  for (int i = 0; i < 8; i++)
+  {
+    for (int j = 0; j < 8; j++)
+    {
+      m_boardRepresentation[i][j * 3] = '[';
+      m_boardRepresentation[i][j * 3 + 1] = ' ';
+      m_boardRepresentation[i][j * 3 + 2] = ']';
+    }
+    m_boardRepresentation[i][24] = ' ';
+    m_boardRepresentation[i][25] = '1' + i;
+    m_boardRepresentation[i][26] = '\n';
+    m_boardRepresentation[i][27] = 0;
+  }
+  for (int i = 0; i < 8; i++)
+  {
+    m_boardRepresentation[8][i * 3] = ' ';
+    m_boardRepresentation[8][i * 3 + 1] = 'a' + i;
+    m_boardRepresentation[8][i * 3 + 2] = ' ';
+  }
+  m_boardRepresentation[8][24] = ' ';
+  m_boardRepresentation[8][25] = ' ';
+  m_boardRepresentation[8][26] = '\n';
+  m_boardRepresentation[8][27] = 0;
+}
 
 void m_clearBoard()
 {
@@ -19,7 +45,7 @@ void m_clearBoard()
   }
 }
 
-void m_setPieces(const piece::boardUtil::BoardState& bs)
+void m_setPieces(const piece::BoardState& bs)
 {
   for (int i = 0; i < 10; i++)
   {
@@ -28,7 +54,7 @@ void m_setPieces(const piece::boardUtil::BoardState& bs)
     {
       if (current_piece & 1)
       {
-        m_boardRepresentation[j >> 3][(j & 7) * 3 + 1] = piece::boardUtil::piece[i];
+        m_boardRepresentation[j >> 3][(j & 7) * 3 + 1] = piece::piece[i];
       }
       current_piece >>= 1;
     }
@@ -52,10 +78,10 @@ void moveVisualizer(uint32_t move)
 
   unsigned long bit;
 
-  _BitScanForward(&bit, ((move & piece::boardUtil::moveModifiers::ATTACKERS) >> 12));
+  _BitScanForward(&bit, ((move & piece::moveModifiers::ATTACKERS) >> 12));
 
-  uint8_t from = move & piece::boardUtil::moveModifiers::FROM;
-  uint8_t to = (move & piece::boardUtil::moveModifiers::TO) >> 6;
+  uint8_t from = move & piece::moveModifiers::FROM;
+  uint8_t to = (move & piece::moveModifiers::TO) >> 6;
 
   for (int i = 0; i < 8; i++)
   {
@@ -76,7 +102,7 @@ void moveVisualizer(uint32_t move)
   std::cout << c_board;
 }
 
-void printToConsole(const piece::boardUtil::BoardState& bs)
+void printToConsole(const piece::BoardState& bs)
 {
   m_clearBoard();
   m_setPieces(bs);
@@ -97,7 +123,7 @@ void printBitBoard(uint64_t board)
   m_printBoard();
 }
 
-void printFenString(const piece::boardUtil::BoardState& bs)
+void printFenString(const piece::BoardState& bs)
 {
   m_clearBoard();
   m_setPieces(bs);

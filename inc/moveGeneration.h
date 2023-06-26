@@ -11,6 +11,10 @@ public:
   MoveGeneration();
   ~MoveGeneration() = default;
 
+  // Generation
+  void generatePossibleMoves(const BoardState& bs, MoveList& ml);
+  void makeMove(BoardState& bs, const uint32_t move);
+
 private:
   // init functions
   void initKingAttacks();
@@ -32,25 +36,39 @@ private:
   template<piece::pieceType P>
   uint64_t generatePieceAttacks(uint64_t board, uint32_t piece);
 
+  // Helper Attacks
+  const uint64_t fileAttacks(uint64_t board, uint32_t position);
+  const uint64_t rankAttacks(uint64_t board, uint32_t position);
+
+  const uint64_t mainDiagonalAttacks(uint64_t board, int position);
+  const uint64_t antiDiagonalAttacks(uint64_t board, int position);
+
+  const inline void fileToRank(uint64_t& bit_board, uint32_t file);
+  const inline void rankToFile(uint64_t& bit_board, uint32_t rank);
+
+  // Move generation
   template<bool whiteTurn>
-  void generateKingMoves(const BoardState& bs, MoveList& ml);
+  const void generateKingMoves(const BoardState& bs, MoveList& ml);
 
   template<bool whiteTurn, piece::pieceType p>
-  void generatePieceMoves(const piece::BoardState& bs, piece::MoveList& ml);
+  const void generatePieceMoves(const piece::BoardState& bs, piece::MoveList& ml);
 
   template<bool whiteTurn>
-  void generatePawnMoves(const BoardState& bs, MoveList& ml);
+  const void generatePawnMoves(const BoardState& bs, MoveList& ml);
+
+  // Rule functions
+  template<bool whiteTurn>
+  void movePiece(BoardState& bs, uint32_t move);
+  void generateAttacks(BoardState& bs);
+  void generatePinsBlocks(BoardState& bs);
+  void generateCastlingOptions(BoardState& bs);
 
   // Helper functions
-
   static uint64_t pinnedRow(uint8_t king, uint8_t piece);
   static uint64_t pinnedDiagonal(uint8_t king, uint8_t piece);
 
-  uint64_t antidiagonalAttacks(uint64_t board, int position);
-  uint64_t maindiagonalAttacks(uint64_t board, int position);
-
-  uint64_t fileAttacks(uint64_t board, uint32_t position);
-  uint64_t rankAttacks(uint64_t board, uint32_t position);
+  template<bool whiteTurn>
+  static uint64_t pawnAttacks(uint64_t pawns);
 
   template<piece::pieceType p>
   static void generateMultipleMoves(uint64_t board, uint64_t moves, uint32_t position, MoveList& ml);
@@ -58,12 +76,17 @@ private:
   static inline uint32_t isCapture(uint64_t board, unsigned long dest);
 
   template<bool whiteTurn>
-  inline uint64_t shift_up(uint64_t pawns);
+  static inline uint64_t shiftUp(uint64_t pawns);
+
+  template<bool whiteTurn>
+  static inline void shiftSide(uint64_t& right, uint64_t& left);
 
   static void pawnBitScan(const BoardState& bs, MoveList& ml, uint64_t& pawns, const int& dir, const uint32_t& move_type);
 
-  void shift_side(uint64_t& right, uint64_t& left, bool white);
+  template<bool whiteTurn>
+  const bool checkPinEP(const BoardState& bs, uint32_t start_pos);
 
+private:
   // Memeber variables
   uint64_t m_kingAttacks[64];
   uint64_t m_knightAttacks[64];

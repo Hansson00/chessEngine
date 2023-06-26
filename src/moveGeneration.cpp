@@ -15,6 +15,71 @@ MoveGeneration::MoveGeneration()
 }
 
 ////////////////////////////////////////////////////////////////
+// Generation
+////////////////////////////////////////////////////////////////
+
+void MoveGeneration::generatePossibleMoves(const BoardState& bs, MoveList& ml)
+{
+  if (bs.whiteTurn)
+  {
+    // White moves
+    generateKingMoves<true>(bs, ml);
+    if (bs.numCheckers > 1)  // Only king moves are legal
+      return;
+    generatePawnMoves<true>(bs, ml);
+    generatePieceMoves<true, piece::pieceType::Queen>(bs, ml);
+    generatePieceMoves<true, piece::pieceType::Rook>(bs, ml);
+    generatePieceMoves<true, piece::pieceType::Bishop>(bs, ml);
+    generatePieceMoves<true, piece::pieceType::Knight>(bs, ml);
+  }
+  else
+  {
+    // Black moves
+    generateKingMoves<false>(bs, ml);
+    if (bs.numCheckers > 1)  // Only king moves are legal
+      return;
+    generatePawnMoves<false>(bs, ml);
+    generatePieceMoves<false, piece::pieceType::Queen>(bs, ml);
+    generatePieceMoves<false, piece::pieceType::Rook>(bs, ml);
+    generatePieceMoves<false, piece::pieceType::Bishop>(bs, ml);
+    generatePieceMoves<false, piece::pieceType::Knight>(bs, ml);
+  }
+}
+
+void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
+{
+  // Fix template
+  if (bs.whiteTurn)
+  {
+    movePiece<true>(bs, move);
+    bs.whiteTurn ^= 1;
+    generateAttacks(bs);
+    generatePinsBlocks(bs);
+
+    bs.castlingRights &= 0b1111;
+
+    if (!bs.numCheckers && bs.castlingRights & 0b11)
+    {
+      generateCastlingOptions(bs);
+    }
+  }
+  else
+  {
+    movePiece<false>(bs, move);
+    bs.whiteTurn ^= 1;
+    generateAttacks(bs);
+    generatePinsBlocks(bs);
+
+    bs.castlingRights &= 0b1111;
+
+    if (!bs.numCheckers && bs.castlingRights & 0b1100)
+    {
+      generateCastlingOptions(bs);
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////
 // Init functions
 ////////////////////////////////////////////////////////////////
 
@@ -314,13 +379,12 @@ uint32_t MoveGeneration::highBitScan(int32_t i)
 // Attacks
 ////////////////////////////////////////////////////////////////
 
-// Done
 template<piece::pieceType p>
 inline uint64_t MoveGeneration::generatePieceAttacks(uint64_t board, uint32_t position)
 {
   if constexpr (p == piece::pieceType::Queen)
   {
-    return maindiagonalAttacks(board, position) | antidiagonalAttacks(board, position) | fileAttacks(board, position) | rankAttacks(board, position);
+    return mainDiagonalAttacks(board, position) | antiDiagonalAttacks(board, position) | fileAttacks(board, position) | rankAttacks(board, position);
   }
   if constexpr (p == piece::pieceType::Rook)
   {
@@ -328,7 +392,7 @@ inline uint64_t MoveGeneration::generatePieceAttacks(uint64_t board, uint32_t po
   }
   if constexpr (p == piece::pieceType::Bishop)
   {
-    return maindiagonalAttacks(board, position) | antidiagonalAttacks(board, position);
+    return mainDiagonalAttacks(board, position) | antiDiagonalAttacks(board, position);
   }
   if constexpr (p == piece::pieceType::Knight)
   {
@@ -337,11 +401,101 @@ inline uint64_t MoveGeneration::generatePieceAttacks(uint64_t board, uint32_t po
 }
 
 ////////////////////////////////////////////////////////////////
-// Moves
+// Helper attacks
+////////////////////////////////////////////////////////////////
+
+// TODO: Fix bad operators
+const uint64_t MoveGeneration::rankAttacks(uint64_t board, uint32_t rook_pos)
+{
+  int column = rook_pos % 8;
+  int shift = (rook_pos / 8) * 8;
+  uint64_t occupancy = (board >> (shift + 1)) & 0x3F;
+  return m_rookAttackTable[column][occupancy] << shift;
+}
+
+// TODO: Fix bad operators
+const uint64_t MoveGeneration::fileAttacks(uint64_t board, uint32_t rook_pos)
+{
+  int file = rook_pos % 8;
+  fileToRank(board, file);
+
+  int occupancy = (int)((board >> 1) & 0b111111);
+  uint64_t fileAttack = m_rookAttackTable[rook_pos / 8][occupancy];
+  rankToFile(fileAttack, 0);
+  return fileAttack >> (7 - file);
+}
+
+const uint64_t MoveGeneration::mainDiagonalAttacks(uint64_t board, int position)
+{
+  int offset = (position & 7) - (position >> 3);
+  int index = 7 + offset;
+  uint64_t diagonal = main_diagonals[index] & board;
+  // Mask relevant bits
+
+  const int shift = 2 + (index - 7) * (index > 7);
+
+  // Shift down to get occupancy bits as LSBs
+  int occupancy = (int)((diagonal * files[1]) >> (56 + shift));
+  // Mask edge bits for corresponding diagonal
+  occupancy &= mask_bits[index];
+
+  // Fetch attack based on diagonal, position (column) and occupancy
+  return m_bishopMain[index][(position & 7) - (offset) * (offset > 0)][occupancy];
+}
+
+// TODO: Fix bad operators
+const uint64_t MoveGeneration::antiDiagonalAttacks(uint64_t board, int position)
+{
+  /*
+  int index = (bishop_pos >> 3) + (bishop_pos & 7);
+  //Occupied bits of relevant diagonal
+  uint64_t diagonal = anti_diagonals[index] & board;
+
+  int shift = 1 + (index > 7) * (index - 7);
+
+  //Rotate diagonal to rank
+  int occupancy = (int)((diagonal * files[0]) >> (56 + shift));
+  //Get inner bits
+  occupancy &= mask_bits[index];
+  //Attack based on which diagonal, which position on the diagonal, and occupancy of the diagonal
+
+  return bishop_anti[index][(bishop_pos & 7) - (shift + 1) * !(index < 8)][occupancy];*/
+
+  // On a given anti diagonal, sum of column and row is equal for all squares => can be indexed by the sum
+  int index = position / 8 + position % 8;
+  // Occupied bits of relevant diagonal
+  uint64_t diagonal = anti_diagonals[index] & board;
+  // To get occupancy bits we will need to know how much to shift
+  int shift = index < 8 ? 1 : index - 6;
+  // Rotate diagonal to rank
+  int occupancy = (int)((diagonal * files[0]) >> (56 + shift));
+  // Get inner bits
+  occupancy = occupancy & mask_bits[index];
+  // Attack based on which diagonal, which position on the diagonal, and occupancy of the diagonal
+  return m_bishopAnti[index][(index < 8 ? position % 8 : position % 8 - shift + 1)][occupancy];
+}
+
+const inline void MoveGeneration::fileToRank(uint64_t& bit_board, uint32_t file)
+{
+  bit_board = (bit_board << (7 - file)) & files[7];
+  bit_board = bit_board * m_shiftedAntiDiagonal;
+  bit_board >>= 56;
+}
+
+const inline void MoveGeneration::rankToFile(uint64_t& bit_board, uint32_t rank)
+{
+  bit_board = (bit_board >> rank * 8) & ranks[0];
+  bit_board = (((bit_board * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101010101ULL) >> 56;
+  bit_board *= main_diagonals[7];
+  bit_board &= files[7];
+}
+
+////////////////////////////////////////////////////////////////
+// Move generation
 ////////////////////////////////////////////////////////////////
 
 template<bool whiteTurn>
-void MoveGeneration::generateKingMoves(const BoardState& bs, MoveList& ml)
+const void MoveGeneration::generateKingMoves(const BoardState& bs, MoveList& ml)
 {
   // both = 0, white = 1, black = 2
   const uint64_t board = bs.teamBoards[0];
@@ -374,7 +528,7 @@ void MoveGeneration::generateKingMoves(const BoardState& bs, MoveList& ml)
 }
 
 template<bool whiteTurn, piece::pieceType p>
-void MoveGeneration::generatePieceMoves(const piece::BoardState& bs, piece::MoveList& ml)
+const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs, piece::MoveList& ml)
 {
   // both = 0, white = 1, black = 2
   const uint64_t board = bs.teamBoards[0];
@@ -417,7 +571,7 @@ void MoveGeneration::generatePieceMoves(const piece::BoardState& bs, piece::Move
   }
 }
 template<bool whiteTurn>
-void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
+const void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
 {
   const uint64_t pawns = bs.pieceBoards[9 - whiteTurn * 5];
   uint64_t promoting = pawns & ranks[1 + whiteTurn * 5];
@@ -439,8 +593,8 @@ void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
   constexpr uint32_t backRight = 9 - 18 * whiteTurn;
 
   // Template
-  uint64_t push = shift_up<whiteTurn>(nonPromoting, whiteTurn) & nonOccupied;
-  uint64_t double_push = shift_up<whiteTurn>(push & startPawns, whiteTurn) & nonOccupied & block;
+  uint64_t push = shiftUp<whiteTurn>(nonPromoting) & nonOccupied;
+  uint64_t double_push = shiftUp<whiteTurn>(push & startPawns) & nonOccupied & block;
   push &= block;
 
   constexpr int back = 8 - whiteTurn * 16;
@@ -456,7 +610,7 @@ void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
   uint64_t pawn_right = nonPromoting & ~(0x0101010101010101ULL + 0x7F7F7F7F7F7F7F7FULL * whiteTurn);
 
   // TODO: template
-  shift_side(pawn_right, pawn_left, whiteTurn);
+  shiftSide<whiteTurn>(pawn_right, pawn_left);
 
   pawn_left &= enemy & block;
   pawn_right &= enemy & block;
@@ -468,13 +622,13 @@ void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
   if (bs.enPassant)
   {
     uint64_t epPos = (1ULL << bs.enPassant);
-    epPos = pawn_attacks(epPos, !whiteTurn);
+    epPos = pawnAttacks<!whiteTurn>(epPos);
     epPos &= pawns & block;
 
     while (epPos)
     {
       _BitScanForward64(&dest, epPos);
-      if (!check_pin_EP(bs, dest))
+      if (!checkPinEP(bs, dest))
       {
         ml.add(dest | ((uint16_t)bs.enPassant) << 6 | moveModifiers::pawn | moveModifiers::EN_PESSANT_CAP);
       }
@@ -494,7 +648,7 @@ void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
     promo_push <<= 6;
 
     // TODO: template
-    uint64_t promo_attacks = pawn_attacks(start_bitboard, whiteTurn) & enemy & block;
+    uint64_t promo_attacks = pawnAttacks<whiteTurn>(start_bitboard) & enemy & block;
 
     // Lägg till alla sorters promotion
     if (promo_push_bitboard & nonOccupied & block)
@@ -589,6 +743,106 @@ void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
 }
 
 ////////////////////////////////////////////////////////////////
+// Rule functions
+////////////////////////////////////////////////////////////////
+
+template<bool whiteTurn>
+void movePiece(BoardState& bs, uint32_t move)
+{
+  const uint32_t placePiece = move & moveModifiers::ATTACKERS;
+
+  unsigned long attacker_square;
+  _BitScanForward64(&attacker_square, placePiece);
+
+  const uint8_t start_square = move & moveModifiers::FROM;
+  const uint64_t start_bitboard = 1ULL << start_square;
+
+  const uint8_t end_square = (move & moveModifiers::TO) >> 6;
+  const uint64_t end_bitboard = 1ULL << end_square;
+
+  // Update bitboards
+
+  bs.teamBoards[2 - whiteTurn] ^= start_bitboard | end_bitboard;
+
+  bs.enPassant = ((end_square + 8) - (16 * bs.whiteTurn)) * ((move & moveModifiers::DPUSH) != 0);
+
+  // if it's the king
+  if (attacker_square == 12)
+  {
+    bs.kings[!whiteTurn] = end_square;
+    // Castling
+    /*if (move & moveModifiers::CASTLE_KING)
+    {
+      const uint64_t castle = CASTLING_ROOK_START_POS<true>(whiteTurn) | CASTLING_ROOK_END_POS<true>(whiteTurn);
+      GETPIECES(pieces::r) ^= castle;
+      TEAM ^= castle;
+    }
+    else if (move & moveModifiers::CASTLE_QUEEN)
+    {
+      const uint64_t castle = CASTLING_ROOK_START_POS<false>(whiteTurn) | CASTLING_ROOK_END_POS<true>(whiteTurn);
+
+      GETPIECES(pieces::r) ^= castle;
+      TEAM ^= castle;
+    }
+    bs.castlingRights &= ~CASTLING_RIGHTS;*/
+  }
+  else
+  {
+    GETPIECES(attacker_square - 13) ^= start_bitboard | end_bitboard;
+    if (move & moveModifiers::PROMO)
+    {
+      // Undoing the assumed new position
+
+      GETPIECES(attacker_square - 13) ^= end_bitboard;
+      unsigned long promo;
+      _BitScanForward64(&promo, move & moveModifiers::PROMO);
+      GETPIECES(promo - 24) ^= end_bitboard;
+    }
+
+    if (move & moveModifiers::EN_PESSANT_CAP)
+    {
+      constexpr uint64_t epCapBoard = whiteTurn ? end_bitboard >> 8 : end_bitboard << 8;
+      bs.pieceBoards[9 - PIECE_OFFSET * whiteTurn] ^= epCapBoard;
+      bs.pieceBoards[1 + whiteTurn] ^= epCapBoard;
+    }
+
+    if (move & moveModifiers::rook)
+    {
+      /*
+      if (L_ROOK & start_bitboard)
+        bs.castling_rights &= ~(CASTLING_RIGHTS & 0b1010);
+      if (R_ROOK & start_bitboard)
+        bs.castling_rights &= ~(CASTLING_RIGHTS & 0b0101);
+        */
+    }
+  }
+
+  if (move & moveModifiers::CAPTURE)
+  {
+    // Find which board was attacked
+    for (int i = PIECE_OFFSET - 1; i > -1; i--)
+    {
+      if (end_bitboard & GETENEMYPIECES(i))
+      {
+        GETENEMYPIECES(i) ^= end_bitboard;
+        bs.pieceBoards[1 + whiteTurn] ^= end_bitboard;
+        break;
+      }
+    }
+  }
+
+  bs.pieceBoards[0] = bs.pieceBoards[1] + bs.pieceBoards[2];
+}
+void generateAttacks(BoardState& bs)
+{
+}
+void generatePinsBlocks(BoardState& bs)
+{
+}
+void generateCastlingOptions(BoardState& bs)
+{
+}
+////////////////////////////////////////////////////////////////
 // Helper functions
 ////////////////////////////////////////////////////////////////
 
@@ -599,8 +853,10 @@ uint64_t MoveGeneration::pinnedRow(uint8_t king, uint8_t piece)
     return ranks[king >> 3];
 
   // On the same file
-  if ((king & 7) == (piece & 7))
-    return files[king & 7];
+
+  king &= 7;
+  if (king == (piece & 7))
+    return files[king];
   return 0;
 }
 
@@ -617,54 +873,17 @@ uint64_t MoveGeneration::pinnedDiagonal(uint8_t king, uint8_t piece)
   return 0;
 }
 
-uint64_t MoveGeneration::maindiagonalAttacks(uint64_t board, int position)
+template<bool whiteTurn>
+uint64_t pawnAttacks(uint64_t pawns)
 {
-  int offset = (position & 7) - (position >> 3);
-  int index = 7 + offset;
-  uint64_t diagonal = main_diagonals[index] & board;
-  // Mask relevant bits
-
-  const int shift = 2 + (index - 7) * (index > 7);
-
-  // Shift down to get occupancy bits as LSBs
-  int occupancy = (int)((diagonal * files[1]) >> (56 + shift));
-  // Mask edge bits for corresponding diagonal
-  occupancy &= mask_bits[index];
-
-  // Fetch attack based on diagonal, position (column) and occupancy
-
-  return m_bishopMain[index][(position & 7) - (offset) * (offset > 0)][occupancy];
-}
-
-uint64_t MoveGeneration::antidiagonalAttacks(uint64_t board, int position)
-{
-  /*
-  int index = (bishop_pos >> 3) + (bishop_pos & 7);
-  //Occupied bits of relevant diagonal
-  uint64_t diagonal = anti_diagonals[index] & board;
-
-  int shift = 1 + (index > 7) * (index - 7);
-
-  //Rotate diagonal to rank
-  int occupancy = (int)((diagonal * files[0]) >> (56 + shift));
-  //Get inner bits
-  occupancy &= mask_bits[index];
-  //Attack based on which diagonal, which position on the diagonal, and occupancy of the diagonal
-
-  return bishop_anti[index][(bishop_pos & 7) - (shift + 1) * !(index < 8)][occupancy];*/
-
-  // On a given anti diagonal, sum of column and row is equal for all squares => can be indexed by the sum
-  int index = position / 8 + position % 8;
-  // Occupied bits of relevant diagonal
-  uint64_t diagonal = anti_diagonals[index] & board;
-  // To get occupancy bits we will need to know how much to shift
-  int shift = index < 8 ? 1 : index - 6;
-  // Rotate diagonal to rank
-  int occupancy = (int)((diagonal * files[0]) >> (56 + shift));
-  // Get inner bits
-  occupancy = occupancy & mask_bits[index];
-  // Attack based on which diagonal, which position on the diagonal, and occupancy of the diagonal
-  return m_bishopAnti[index][(index < 8 ? position % 8 : position % 8 - shift + 1)][occupancy];
+  if constexpr (whiteTurn)
+  {
+    return ((pawns & ~files[7]) << 9) | ((pawns & ~files[0]) << 7);
+  }
+  else
+  {
+    return ((pawns & ~files[0]) >> 9) | ((pawns & ~files[7]) >> 7);
+  }
 }
 
 template<piece::pieceType p>
@@ -703,7 +922,7 @@ inline uint32_t MoveGeneration::isCapture(uint64_t board, unsigned long dest)
 }
 
 template<bool whiteTurn>
-inline uint64_t MoveGeneration::shift_up(uint64_t pawns)
+inline uint64_t MoveGeneration::shiftUp(uint64_t pawns)
 {
   if constexpr (whiteTurn)
   {
@@ -712,6 +931,21 @@ inline uint64_t MoveGeneration::shift_up(uint64_t pawns)
   else
   {
     return pawns >> 8;
+  }
+}
+
+template<bool whiteTurn>
+inline void MoveGeneration::shiftSide(uint64_t& right, uint64_t& left)
+{
+  if constexpr (whiteTurn)
+  {
+    right = (right << 9);
+    left = (left << 7);
+  }
+  else
+  {
+    right = (right >> 9);
+    left = (left >> 7);
   }
 }
 
@@ -724,6 +958,41 @@ void MoveGeneration::pawnBitScan(const BoardState& bs, MoveList& ml, uint64_t& p
     ml.add((dest + dir) | dest << 6 | moveModifiers::pawn | move_type);
     pawns &= pawns - 1;
   }
+}
+
+template<bool whiteTurn>
+bool MoveGeneration::checkPinEP(const BoardState& bs, uint32_t start_pos)
+{
+  uint8_t king = bs.kings[!whiteTurn];
+  uint64_t rank = ranks[king >> 3];
+  uint64_t start_pos_BB = (1ULL << start_pos);
+
+  constexpr uint8_t offset = whiteTurn * PIECE_OFFSET;
+
+  if (start_pos_BB & rank)
+  {
+    // Rooks and queesnt
+    uint64_t sliders = (bs.pieceBoards[offset] | bs.pieceBoards[1 + offset]) & rank;
+
+    if (sliders)
+    {
+      constexpr int back = 8 - whiteTurn * 16;
+      uint64_t board = bs.teamBoards[0] & ~start_pos_BB & ~(1ULL << (bs.enPassant + back));
+      uint64_t attacks = 0;
+
+      unsigned long slide_pos;
+      while (sliders)
+      {
+        _BitScanForward64(&slide_pos, sliders);
+
+        attacks |= rankAttacks(board, slide_pos);
+        sliders &= sliders - 1;
+      }
+      return attacks & (1ULL << king);
+    }
+    return 0;
+  }
+  return 0;
 }
 
 }  // namespace piece

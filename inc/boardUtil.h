@@ -7,6 +7,8 @@ namespace piece
 
 constexpr auto PIECE_OFFSET = 5;
 #define GETPIECES(piece) bs.pieceBoards[piece + PIECE_OFFSET * whiteTurn]
+#define GETENEMYPIECES(piece) bs.pieceBoards[piece + PIECE_OFFSET * whiteTurn]
+#define CASTLING_RIGHTS (0b1100 - 0b1001 * whiteTurn)
 
 constexpr uint64_t CASTELING_K_CHECK = 1 << 4;
 constexpr uint64_t CASTELING_Q_CHECK = 1 << 5;

@@ -57,8 +57,10 @@ private:
   const void generatePawnMoves(const BoardState& bs, MoveList& ml);
 
   // Rule functions
+  template<bool whiteTurn, bool castlingAllowed, bool enemyCastlingAllowed>
+  const void movePiece(BoardState& bs, uint32_t move);
+
   template<bool whiteTurn>
-  void movePiece(BoardState& bs, uint32_t move);
   void generateAttacks(BoardState& bs);
   void generatePinsBlocks(BoardState& bs);
   void generateCastlingOptions(BoardState& bs);
@@ -85,6 +87,12 @@ private:
 
   template<bool whiteTurn>
   const bool checkPinEP(const BoardState& bs, uint32_t start_pos);
+
+  template<bool white, bool king>
+  static constexpr uint64_t castlingRookStartPos();
+
+  template<bool white, bool king>
+  static constexpr uint64_t castlingRookEndPos();
 
 private:
   // Memeber variables

@@ -61,11 +61,18 @@ private:
   const void movePiece(BoardState& bs, uint32_t move);
 
   template<bool whiteTurn>
-  void generateAttacks(BoardState& bs);
-  void generatePinsBlocks(BoardState& bs);
-  void generateCastlingOptions(BoardState& bs);
+  const void generateAttacks(BoardState& bs);
+
+  template<bool whiteTurn>
+  const void generatePinsBlocks(BoardState& bs);
+
+  template<bool whiteTurn>
+  const void generateCastlingOptions(BoardState& bs);
 
   // Helper functions
+  template<bool whiteTurn>
+  const void promotionHelper(const BoardState& bs, MoveList& ml, uint32_t promoting);
+
   static uint64_t pinnedRow(uint8_t king, uint8_t piece);
   static uint64_t pinnedDiagonal(uint8_t king, uint8_t piece);
 

@@ -69,14 +69,11 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
     }
     bs.whiteTurn ^= 1;
     generateAttacks<true>(bs);
-    generatePinsBlocks(bs);
+    generatePinsBlocks<true>(bs);
 
     bs.castlingRights &= 0b1111;
-
     if (!bs.numCheckers && bs.castlingRights & 0b11)
-    {
-      generateCastlingOptions(bs);
-    }
+      generateCastlingOptions<true>(bs);
   }
   else
   {
@@ -100,14 +97,11 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
 
     bs.whiteTurn ^= 1;
     generateAttacks<false>(bs);
-    generatePinsBlocks(bs);
+    generatePinsBlocks<false>(bs);
 
     bs.castlingRights &= 0b1111;
-
     if (!bs.numCheckers && bs.castlingRights & 0b1100)
-    {
-      generateCastlingOptions(bs);
-    }
+      generateCastlingOptions<false>(bs);
   }
 }
 
@@ -668,50 +662,8 @@ const void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
     }
   }
 
-  while (promoting)
-  {
-    _BitScanForward64(&dest, promoting);
-    promoting &= promoting - 1;
-
-    const uint64_t startBitboard = (1ULL << dest);
-
-    uint16_t promo_push = dest + (16 * whiteTurn - 8);
-    const uint64_t promo_push_bitboard = (1ULL << promo_push);
-    promo_push <<= 6;
-
-    // TODO: template
-    uint64_t promo_attacks = pawnAttacks<whiteTurn>(startBitboard) & enemy & block;
-
-    // Lägg till alla sorters promotion
-    if (promo_push_bitboard & nonOccupied & block)
-    {
-      if ((startBitboard & bs.pinnedSquares) && (promo_push_bitboard & bs.pinnedSquares) || !(startBitboard & bs.pinnedSquares))
-      {
-        ml.add(dest | promo_push | moveModifiers::pawn | moveModifiers::PROMO_QUEEN);
-        ml.add(dest | promo_push | moveModifiers::pawn | moveModifiers::PROMO_ROOK);
-        ml.add(dest | promo_push | moveModifiers::pawn | moveModifiers::PROMO_BISHOP);
-        ml.add(dest | promo_push | moveModifiers::pawn | moveModifiers::PROMO_KNIGHT);
-      }
-    }
-
-    unsigned long attack_square;
-    while (promo_attacks)
-    {
-      _BitScanForward64(&attack_square, promo_attacks);
-      uint64_t attack_square_bit_board = 1ULL << attack_square;
-
-      attack_square <<= 6;
-
-      if ((startBitboard & bs.pinnedSquares) && (attack_square_bit_board & bs.pinnedSquares) || !(startBitboard & bs.pinnedSquares))
-      {
-        ml.add(dest | attack_square | moveModifiers::pawn | moveModifiers::PROMO_QUEEN | moveModifiers::CAPTURE);
-        ml.add(dest | attack_square | moveModifiers::pawn | moveModifiers::PROMO_ROOK | moveModifiers::CAPTURE);
-        ml.add(dest | attack_square | moveModifiers::pawn | moveModifiers::PROMO_BISHOP | moveModifiers::CAPTURE);
-        ml.add(dest | attack_square | moveModifiers::pawn | moveModifiers::PROMO_KNIGHT | moveModifiers::CAPTURE);
-      }
-      promo_attacks &= promo_attacks - 1;
-    }
-  }
+  if (promoting)
+    promotionHelper<whiteTurn>(bs, ml, promoting);
 
   if (pinnedPawns)
   {
@@ -980,7 +932,7 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
 }
 
 template<bool whiteTurn>
-void MoveGeneration::generateAttacks(BoardState& bs)
+const void MoveGeneration::generateAttacks(BoardState& bs)
 {
   uint64_t board = 1ULL << bs.kings[!whiteTurn] ^ bs.teamBoards[0];
   uint64_t attacks = 0;
@@ -1048,15 +1000,216 @@ void MoveGeneration::generateAttacks(BoardState& bs)
   // Add to attacks
   bs.attacks = attacks;
 }
-void generatePinsBlocks(BoardState& bs)
+
+template<bool whiteTurn>
+const void MoveGeneration::generatePinsBlocks(BoardState& bs)
 {
+  const uint8_t king = bs.kings[!whiteTurn];
+  const uint64_t king_bitboard = (1ULL << king);
+
+  uint8_t checks = 0;
+  uint64_t block_mask = 0;
+  uint64_t pin_mask = 0;
+
+  const uint64_t x_ray_diagonal = main_diagonals[(7 - (king >> 3) + (king & 7))] | anti_diagonals[(king >> 3) + (king & 7)];
+  const uint64_t x_ray_straigt = ranks[king >> 3] | files[king & 7];
+
+  uint64_t diagonal_threats = (bs.pieceBoards[0 + PIECE_OFFSET * whiteTurn] | bs.pieceBoards[2 + PIECE_OFFSET * whiteTurn]) & x_ray_diagonal;
+  uint64_t straight_threats = (bs.pieceBoards[0 + PIECE_OFFSET * whiteTurn] | bs.pieceBoards[1 + PIECE_OFFSET * whiteTurn]) & x_ray_straigt;
+
+  const uint64_t pawns = pawnAttacks<whiteTurn>(king_bitboard) & GETENEMYPIECES(4);
+  const uint64_t knights = m_kingAttacks[king] & GETENEMYPIECES(3);
+
+  if (pawns)
+  {
+    checks++;
+    block_mask |= pawns;
+  }
+  if (knights)
+  {
+    checks++;
+    block_mask |= knights;
+  }
+  unsigned long threat;
+
+  // TODO: Create a function!
+  while (diagonal_threats)
+  {
+    _BitScanForward64(&threat, diagonal_threats);
+    uint64_t threat_bitboard = 1ULL << threat;
+    int way;
+
+    if (king < threat)
+    {
+      way = ((king & 7) < (threat & 7)) * 2 + 7;
+    }
+    else
+    {
+      way = ((king & 7) > (threat & 7)) * (-2) - 7;
+    }
+    uint64_t temp_pin_mask = 0;
+    uint8_t pieces = 0;
+    for (int i = 1; i < 7; i++)
+    {
+      uint64_t pos = 1ULL << (king + way * i);
+      temp_pin_mask |= pos;
+
+      if (pos & threat_bitboard)
+      {
+        if (!pieces)
+        {
+          checks++;
+          block_mask |= temp_pin_mask;
+          break;
+        }
+        else if (pieces == 1)
+        {
+          pin_mask |= temp_pin_mask;
+          break;
+        }
+      }
+      else if (pos & bs.teamBoards[2 - whiteTurn])
+      {
+        pieces++;
+      }
+      else if (pos & bs.teamBoards[1 + whiteTurn])
+      {
+        break;
+      }
+    }
+    diagonal_threats &= diagonal_threats - 1;
+  }
+
+  while (straight_threats)
+  {
+    _BitScanForward64(&threat, straight_threats);
+    uint64_t threat_bitboard = 1ULL << threat;
+    int way;
+
+    if (king < threat)
+    {
+      way = ((king & 7) == (threat & 7)) * 7 + 1;
+    }
+    else
+    {
+      way = ((king & 7) == (threat & 7)) * (-7) - 1;
+    }
+    uint64_t temp_pin_mask = 0;
+    uint8_t pieces = 0;
+    for (int i = 1; i < 7; i++)
+    {
+      uint64_t pos = 1ULL << (king + way * i);
+      temp_pin_mask |= pos;
+
+      if (pos & threat_bitboard)
+      {
+        if (!pieces)
+        {
+          checks++;
+          block_mask |= temp_pin_mask;
+          break;
+        }
+        else if (pieces == 1)
+        {
+          pin_mask |= temp_pin_mask;
+        }
+      }
+      else if (pos & bs.teamBoards[2 - whiteTurn])
+      {
+        pieces++;
+      }
+      else if (pos & bs.teamBoards[1 + whiteTurn])
+      {
+        break;
+      }
+    }
+    straight_threats &= straight_threats - 1;
+  }
+
+  bs.pinnedSquares = pin_mask;
+
+  if (block_mask)
+  {
+    bs.blockMask = block_mask;
+  }
+  else
+  {
+    bs.blockMask = ~0;
+  }
+  bs.numCheckers = checks;
 }
-void generateCastlingOptions(BoardState& bs)
+
+template<bool whiteTurn>
+const void MoveGeneration::generateCastlingOptions(BoardState& bs)
 {
+  const uint64_t board = bs.teamBoards[0];
+  constexpr uint64_t castleKingAttacks = whiteTurn ? 0b1100000ULL : (0b1100000ULL << 56);
+  constexpr uint64_t castleQueenAttacks = whiteTurn ? 0b1100ULL : (0b1100ULL << 56);
+  constexpr uint64_t castleQueenMoveSquares = whiteTurn ? 0b1110ULL : (0b1110ULL << 56);
+
+  uint8_t castling = bs.castlingRights & (0b1100 - 0b1001 * whiteTurn);
+  if ((castling & 0b0101) && ((castleKingAttacks & (board | bs.attacks)) == 0))
+  {
+    bs.castlingRights |= CASTELING_K_CHECK;
+  }
+  if ((castling & 0b1010) && (((castleQueenAttacks & bs.attacks) == 0) && ((castleQueenMoveSquares & board) == 0)))
+  {
+    bs.castlingRights |= CASTELING_Q_CHECK;
+  }
 }
 ////////////////////////////////////////////////////////////////
 // Helper functions
 ////////////////////////////////////////////////////////////////
+
+template<bool whiteTurn>
+const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, uint32_t promoting)
+{
+  unsigned long dest;
+  while (promoting)
+  {
+    _BitScanForward64(&dest, promoting);
+
+    const uint64_t startBitboard = (1ULL << dest);
+
+    uint16_t promoPush = dest + (16 * whiteTurn - 8);
+    const uint64_t promoPushBitboard = (1ULL << promoPush);
+    promoPush <<= 6;
+
+    uint64_t promo_attacks = pawnAttacks<whiteTurn>(startBitboard) & bs.teamBoards[1 + whiteTurn] & bs.blockMask;
+
+    if (promoPushBitboard & ~bs.teamBoards[0] & bs.blockMask)
+    {
+      if ((startBitboard & bs.pinnedSquares) && (promoPushBitboard & bs.pinnedSquares) || !(startBitboard & bs.pinnedSquares))
+      {
+        const uint32_t combo = dest | promoPush | moveModifiers::pawn;
+        ml.add(combo | moveModifiers::PROMO_QUEEN);
+        ml.add(combo | moveModifiers::PROMO_ROOK);
+        ml.add(combo | moveModifiers::PROMO_BISHOP);
+        ml.add(combo | moveModifiers::PROMO_KNIGHT);
+      }
+    }
+
+    unsigned long attack_square;
+    while (promo_attacks)
+    {
+      _BitScanForward64(&attack_square, promo_attacks);
+      uint64_t attack_square_bit_board = 1ULL << attack_square;
+
+      attack_square <<= 6;
+
+      if ((startBitboard & bs.pinnedSquares) && (attack_square_bit_board & bs.pinnedSquares) || !(startBitboard & bs.pinnedSquares))
+      {
+        const uint32_t combo = dest | attack_square | moveModifiers::pawn | moveModifiers::CAPTURE;
+        ml.add(combo | moveModifiers::PROMO_QUEEN);
+        ml.add(combo | moveModifiers::PROMO_ROOK);
+        ml.add(combo | moveModifiers::PROMO_BISHOP);
+        ml.add(combo | moveModifiers::PROMO_KNIGHT);
+      }
+      promo_attacks &= promo_attacks - 1;
+    }
+    promoting &= promoting - 1;
+  }
+}
 
 uint64_t MoveGeneration::pinnedRow(uint8_t king, uint8_t piece)
 {
@@ -1086,7 +1239,7 @@ uint64_t MoveGeneration::pinnedDiagonal(uint8_t king, uint8_t piece)
 }
 
 template<bool whiteTurn>
-uint64_t pawnAttacks(uint64_t pawns)
+uint64_t MoveGeneration::pawnAttacks(uint64_t pawns)
 {
   if constexpr (whiteTurn)
   {
@@ -1220,7 +1373,7 @@ constexpr uint64_t MoveGeneration::castlingRookStartPos()
   }
 }
 template<bool white, bool king>
-constexpr uint64_t castlingRookEndPos()
+constexpr uint64_t MoveGeneration::castlingRookEndPos()
 {
   if constexpr (white)
   {

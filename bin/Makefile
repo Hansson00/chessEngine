@@ -15,7 +15,7 @@ inc += ../inc/
 
 # Compile command
 main:
-	$(cc) $(file) -o main
+	$(cc) $(file) -Wall -o main
 
 clean:
 	rm *.exe

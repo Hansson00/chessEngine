@@ -1,6 +1,8 @@
 
 #pragma once
+#include <intrin.h>
 #include <cinttypes>
+#include <iostream>
 
 namespace piece
 {
@@ -18,6 +20,33 @@ const static char piece[12] = {'Q', 'R', 'B', 'N', 'P', 'q', 'r', 'b', 'n', 'p'}
 enum class MoveListType
 {
   CAPTURE = 4194304
+};
+
+enum moveModifiers
+{
+  FROM = 63,
+  TO = 4032,
+  FROM_TO = 4095,
+  /* Attack piece board */
+  ATTACKERS = 258048,
+  king = 4096,
+  queen = 8192,
+  rook = 16384,
+  bishop = 32768,
+  knight = 65536,
+  pawn = 131072,
+
+  WHITE_TO_MOVE = 262144,
+  EN_PESSANT_CAP = 524288,
+  CASTLE_KING = 1048576,
+  CASTLE_QUEEN = 2097152,
+  CAPTURE = 4194304,
+  DPUSH = 8388608,
+  PROMO_QUEEN = 16777216,
+  PROMO_ROOK = 33554432,
+  PROMO_BISHOP = 67108864,
+  PROMO_KNIGHT = 134217728,
+  PROMO = 251658240
 };
 
 struct BoardState
@@ -46,9 +75,42 @@ struct MoveList
 {
   uint32_t move[100];
   uint8_t end = 0;
+
+  void moveVisualizerTEMP(uint32_t move)
+  {
+    const char piece[6] = {'k', 'q', 'r', 'b', 'n', 'p'};
+
+    char c_board[8 * 9 + 1] = {};  // xxxxxxxx + \n and 0 at the end
+
+    unsigned long bit;
+
+    _BitScanForward(&bit, ((move & moveModifiers::ATTACKERS) >> 12));
+
+    uint8_t from = move & moveModifiers::FROM;
+    uint8_t to = (move & moveModifiers::TO) >> 6;
+
+    for (int i = 0; i < 8; i++)
+    {
+      for (int j = 0; j < 8; j++)
+      {
+        if (i * 8 + j == from)
+          c_board[(7 - i) * 9 + j] = piece[bit];
+        else if (i * 8 + j == to)
+          c_board[(7 - i) * 9 + j] = 'x';
+        else
+          c_board[(7 - i) * 9 + j] = '-';
+      }
+      c_board[(7 - i) * 9 + 8] = '\n';
+    }
+
+    c_board[8 * 9] = 0;
+
+    std::cout << c_board << std::endl;
+  }
   void inline add(uint32_t newMove)
   {
     move[end++] = newMove;
+    // moveVisualizerTEMP(newMove);
   }
   void inline reset()
   {
@@ -65,33 +127,6 @@ enum class pieceType
   Knight,
   Pawn,
   King
-};
-
-enum moveModifiers
-{
-  FROM = 63,
-  TO = 4032,
-  FROM_TO = 4095,
-  /* Attack piece board */
-  ATTACKERS = 258048,
-  king = 4096,
-  queen = 8192,
-  rook = 16384,
-  bishop = 32768,
-  knight = 65536,
-  pawn = 131072,
-
-  WHITE_TO_MOVE = 262144,
-  EN_PESSANT_CAP = 524288,
-  CASTLE_KING = 1048576,
-  CASTLE_QUEEN = 2097152,
-  CAPTURE = 4194304,
-  DPUSH = 8388608,
-  PROMO_QUEEN = 16777216,
-  PROMO_ROOK = 33554432,
-  PROMO_BISHOP = 67108864,
-  PROMO_KNIGHT = 134217728,
-  PROMO = 251658240
 };
 
 constexpr uint64_t files[8] = {0x0101010101010101ULL, 0x0202020202020202ULL, 0x0404040404040404ULL,

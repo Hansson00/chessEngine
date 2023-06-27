@@ -99,7 +99,7 @@ void moveVisualizer(uint32_t move)
 
   c_board[8 * 9] = 0;
 
-  std::cout << c_board;
+  std::cout << c_board << std::endl;
 }
 
 void printToConsole(const piece::BoardState& bs)

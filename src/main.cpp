@@ -1,7 +1,8 @@
+#include <memory>
 #include "../inc/Engine.h"
-
+#include <iostream>
 int main()
 {
-  Engine engine = Engine();
-  engine.run();
+  std::unique_ptr<Engine> engine = std::make_unique<Engine>();
+  engine->run();
 }

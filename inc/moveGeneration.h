@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "../inc/boardUtil.h"
 #include <cinttypes>
+
 namespace piece
 {
 
@@ -12,6 +13,7 @@ public:
   ~MoveGeneration() = default;
 
   // Generation
+  void startUp(BoardState& bs, MoveList& ml);
   void generatePossibleMoves(const BoardState& bs, MoveList& ml);
   void makeMove(BoardState& bs, const uint32_t move);
 

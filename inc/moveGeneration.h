@@ -1,12 +1,23 @@
 #pragma once
-#include <stdint.h>
-#include "../inc/boardUtil.h"
+
 #include <cinttypes>
+#include <stdint.h>
+
+#include "boardUtil.h"
+#include "magicalBitboards.h"
 
 namespace piece
 {
 
-class MoveGeneration
+struct PawnMoves
+{
+  const char back;
+  const char backx2;
+  const char backLeft;
+  const char backRight;
+};
+
+class MoveGeneration : private magicalBits::MagicalBitboards
 {
 public:
   MoveGeneration();
@@ -17,46 +28,34 @@ public:
   void generatePossibleMoves(const BoardState& bs, MoveList& ml);
   void makeMove(BoardState& bs, const uint32_t move);
 
+  template<bool whiteTurn, bool pins>
+  const void generatePawnMoves(const BoardState& bs, MoveList& ml);
+
+  template<bool whiteTurn>
+  const void generatePawnAttacks(const BoardState& bs, uint64_t& attacks);
+
+  const uint64_t singlePawnAttack(uint8_t king, bool white);
+
 private:
   // init functions
   void initKingAttacks();
   void initKnightAttacks();
-  void initRowAttacks();
-  void initMaindiagonalAttacks();
-  void initAntidiagonalAttacks();
-
-  // init helpers
-  static uint64_t calcRowAttack(uint64_t rowOccupancy, int position);
-  static uint64_t setMaindiagonalOccupancy(uint64_t diagonal, uint32_t occupancy);
-  static uint64_t calcMaindiagonalAttack(uint64_t board_occupancy, int pos);
-  static uint64_t setAntidiagonalOccupancy(uint64_t diagonal, uint32_t occupancy);
-  static uint64_t calcAntidiagonalAttack(uint64_t board_occupancy, int position);
-  static uint32_t longHighBitScan(uint64_t i);
-  static uint32_t highBitScan(int32_t i);
+  void initPawnAttacks();
 
   // Attack functions
   template<piece::pieceType P>
-  uint64_t generatePieceAttacks(uint64_t board, uint32_t piece);
+  const inline uint64_t generatePieceAttacks(uint64_t board, uint32_t piece);
 
-  // Helper Attacks
-  const uint64_t fileAttacks(uint64_t board, uint32_t position);
-  const uint64_t rankAttacks(uint64_t board, uint32_t position);
-
-  const uint64_t mainDiagonalAttacks(uint64_t board, int position);
-  const uint64_t antiDiagonalAttacks(uint64_t board, int position);
-
-  const inline void fileToRank(uint64_t& bit_board, uint32_t file);
-  const inline void rankToFile(uint64_t& bit_board, uint32_t rank);
+  const inline uint64_t getBishopAttacks(uint8_t square, uint64_t occupancy);
+  const inline uint64_t getRookAttacks(uint8_t square, uint64_t occupancy);
 
   // Move generation
   template<bool whiteTurn>
   const void generateKingMoves(const BoardState& bs, MoveList& ml);
 
   template<bool whiteTurn, piece::pieceType p>
-  const void generatePieceMoves(const piece::BoardState& bs, piece::MoveList& ml);
-
-  template<bool whiteTurn>
-  const void generatePawnMoves(const BoardState& bs, MoveList& ml);
+  const void generatePieceMoves(const piece::BoardState& bs,
+                                piece::MoveList& ml);
 
   // Rule functions
   template<bool whiteTurn, bool castlingAllowed, bool enemyCastlingAllowed>
@@ -71,31 +70,21 @@ private:
   template<bool whiteTurn>
   const void generateCastlingOptions(BoardState& bs);
 
+  template<bool whiteTurn>
+  const void enPassantHelper(const BoardState& bs, MoveList& ml, uint64_t& epPosBitboard);
+
+  template<bool whiteTurn>
+  const void promotionHelper(const BoardState& bs, MoveList& ml, uint64_t& promoting);
+
+  template<bool whiteTurn>
+  void pinnedPawnsHelper(const BoardState& bs, MoveList& ml, uint64_t& pinnedPawns);
+
   // Helper functions
-  template<bool whiteTurn>
-  const void promotionHelper(const BoardState& bs, MoveList& ml, uint32_t promoting);
-
-  static uint64_t pinnedRow(uint8_t king, uint8_t piece);
-  static uint64_t pinnedDiagonal(uint8_t king, uint8_t piece);
-
-  template<bool whiteTurn>
-  static uint64_t pawnAttacks(uint64_t pawns);
 
   template<piece::pieceType p>
   static void generateMultipleMoves(uint64_t board, uint64_t moves, uint32_t position, MoveList& ml);
 
   static inline uint32_t isCapture(uint64_t board, unsigned long dest);
-
-  template<bool whiteTurn>
-  static inline uint64_t shiftUp(uint64_t pawns);
-
-  template<bool whiteTurn>
-  static inline void shiftSide(uint64_t& right, uint64_t& left);
-
-  static void pawnBitScan(const BoardState& bs, MoveList& ml, uint64_t& pawns, const int& dir, const uint32_t& move_type);
-
-  template<bool whiteTurn>
-  const bool checkPinEP(const BoardState& bs, uint32_t start_pos);
 
   template<bool white, bool king>
   static constexpr uint64_t castlingRookStartPos();
@@ -103,16 +92,37 @@ private:
   template<bool white, bool king>
   static constexpr uint64_t castlingRookEndPos();
 
-private:
+  // PAWN stuff
+
+  template<bool whiteTurn>
+  static inline uint64_t shiftUp(uint64_t pawns);
+
+  template<bool whiteTurn>
+  static inline void shiftSide(uint64_t& right, uint64_t& left);
+
+  template<bool pins>
+  static void pawnBitScan(const BoardState& bs, MoveList& ml, uint64_t& pawns, const char dir, const uint32_t& move_type);
+
+  template<bool whiteTurn>
+  const bool checkPinEP(const BoardState& bs, uint32_t start_pos);
+
+  std::function<uint64_t(uint8_t, uint64_t)> m_rowAttacks_f;
+
+  static constexpr uint8_t whitePawns = 4;
+  static constexpr uint8_t blackPawns = 9;
+
+  // Test if these are correct
+  static constexpr uint64_t rank7 = 0b11111111ULL << (8 * 6);
+  static constexpr uint64_t rank6 = 0b11111111ULL << (8 * 5);
+  static constexpr uint64_t rank3 = 0b11111111ULL << (8 * 2);
+  static constexpr uint64_t rank2 = 0b11111111ULL << (8);
+
+  static constexpr PawnMoves whiteMoves = {-8, -16, -7, -9};
+  static constexpr PawnMoves blackMoves = {8, 16, 7, 9};
   // Memeber variables
   uint64_t m_kingAttacks[64];
   uint64_t m_knightAttacks[64];
-  uint64_t** m_bishopMain[15];
-  uint64_t** m_bishopAnti[15];
-  uint64_t m_rookAttackTable[8][64];
-  uint64_t m_shiftedAntiDiagonal = (1ULL) | (1ULL << 7) | (1ULL << 14) | (1ULL << 21) | (1ULL << 28) | (1ULL << 35) | (1ULL << 42) | (1ULL << 49);
+  uint64_t m_pawnAttacks[2][56];
 };
-
-const uint32_t mask_bits[15] = {0, 0, 1, 3, 7, 15, 31, 63, 31, 15, 7, 3, 1, 0, 0};
 
 }  // namespace piece

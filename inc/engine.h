@@ -13,7 +13,7 @@ class Engine
 {
 public:
   Engine();
-  ~Engine() = default;
+  ~Engine();
 
   void run();
 
@@ -28,17 +28,20 @@ private:
 
   // Perft
   void perftCommand(std::string str);
-  uint32_t perft(uint8_t depth, const piece::BoardState& bs);
+  uint64_t perft(uint8_t depth, const piece::BoardState& bs);
   uint32_t search(uint8_t depth, const piece::BoardState& bs);
 
   // Tools
+  void moveParserToFile(uint32_t move, std::ofstream& myFile);
   void movesParser();
   void moveParser(uint32_t move);
   void resetState();
+  void tests();
+  void setState(const char* str, piece::BoardState& bs);
   void initFenstring(piece::BoardState& bs, const char* str);
 
   // Members
-  std::unique_ptr<piece::MoveGeneration> m_moveGenerator;
+  piece::MoveGeneration* m_moveGenerator;
   piece::BoardState m_bs;
   piece::MoveList m_ml;
   std::stack<piece::BoardState> m_prevStates;

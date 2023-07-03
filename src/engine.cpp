@@ -1,20 +1,29 @@
 #include "../inc/engine.h"
 
-#include <iostream>
+#include <chrono>
+#include <fstream>
 #include <intrin.h>
+#include <iostream>
+#include <stdint.h>
+
+// #define PARSE_TO_FILE
 
 Engine::Engine()
 {
-  m_moveGenerator = std::make_unique<piece::MoveGeneration>();
+  GUI::m_setup();
+  m_moveGenerator = new piece::MoveGeneration();
   resetState();
 
   std::cout << "Welcome to engine version 0.1. Use -h for help." << std::endl;
 }
 
+Engine::~Engine()
+{
+  delete (m_moveGenerator);
+}
+
 void Engine::run()
 {
-  GUI::m_setup();
-
   while (true)
   {
     engineInterface();
@@ -90,6 +99,10 @@ void Engine::engineInterface()
   {
     resetState();
   }
+  else if (strcmp(str.c_str(), "tests") == 0)
+  {
+    tests();
+  }
 }
 
 std::string Engine::getInput()
@@ -158,7 +171,8 @@ void Engine::movePiece(std::string str)
 
     for (int i = 0; i < m_ml.end; i++)
     {
-      if ((m_ml.move[i] & (piece::moveModifiers::FROM_TO | piece::moveModifiers::PROMO)) == move)
+      if ((m_ml.move[i] & (piece::moveModifiers::FROM_TO |
+                           piece::moveModifiers::PROMO)) == move)
       {
         m_prevStates.push(m_bs);
         m_moveGenerator->makeMove(m_bs, m_ml.move[i]);
@@ -203,19 +217,22 @@ void Engine::perftCommand(std::string str)
     }
   }
   uint8_t times = std::stoi(token);
-  if (times > 6)
+  if (times > 7)
   {
-    std::cout << "Maximum perft value supported is currently 6" << std::endl;
+    std::cout << "Maximum perft value supported is currently 7" << std::endl;
     return;
   }
 
   perft(times, m_bs);
 }
 
-uint32_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
+uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
 {
-  // hash_hits = 0;
-  uint32_t num_positions = 0;
+#ifdef PARSE_TO_FILE
+  std::ofstream myfile;
+  myfile.open("moves.txt");
+#endif
+  uint64_t num_positions = 0;
   piece::BoardState current = bs;
 
   piece::MoveList ml;
@@ -227,11 +244,20 @@ uint32_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
     uint32_t part = search(depth - 1, current);
     num_positions += part;
     current = bs;
+#ifdef PARSE_TO_FILE
+    moveParserToFile(ml.move[i], myfile);
+    myfile << ": " << part << std::endl;
+
     moveParser(ml.move[i]);
     std::cout << ": " << part << std::endl;
+#endif
   }
+#ifdef PARSE_TO_FILE
+  myfile.close();
+#endif
   std::cout << "\nTotal: ";
   std::cout << num_positions << std::endl;
+
   return num_positions;
 }
 
@@ -263,6 +289,45 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs)
 ////////////////////////////////////////////////////////////////
 // Tools
 ////////////////////////////////////////////////////////////////
+void Engine::moveParserToFile(uint32_t move, std::ofstream& myFile)
+{
+  char row_from = (move & piece::moveModifiers::FROM) & 7;
+  char col_from = (move & piece::moveModifiers::FROM) >> 3;
+
+  char row_to = ((move & piece::moveModifiers::TO) >> 6) & 7;
+  char col_to = ((move & piece::moveModifiers::TO) >> 6) >> 3;
+
+  if (move & piece::moveModifiers::PROMO)
+  {
+    char promo_p;
+
+    switch (move & piece::moveModifiers::PROMO)
+    {
+      case (piece::moveModifiers::PROMO_QUEEN):
+        promo_p = 'q';
+        break;
+      case (piece::moveModifiers::PROMO_ROOK):
+        promo_p = 'r';
+        break;
+      case (piece::moveModifiers::PROMO_BISHOP):
+        promo_p = 'b';
+        break;
+      case (piece::moveModifiers::PROMO_KNIGHT):
+        promo_p = 'n';
+        break;
+
+      default:
+        break;
+    }
+    myFile << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to)
+           << col_to + 1 << promo_p;
+  }
+  else
+  {
+    myFile << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to)
+           << col_to + 1;
+  }
+}
 
 void Engine::movesParser()
 {
@@ -303,23 +368,97 @@ void Engine::moveParser(uint32_t move)
       default:
         break;
     }
-    std::cout << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to) << col_to + 1 << promo_p;
+    std::cout << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to)
+              << col_to + 1 << promo_p;
   }
   else
   {
-    std::cout << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to) << col_to + 1;
+    std::cout << (char)('a' + row_from) << col_from + 1 << (char)('a' + row_to)
+              << col_to + 1;
   }
 }
 
 void Engine::resetState()
 {
   m_bs = {};
-  initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  // initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   // initFenstring(m_bs, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq");
-  //  initFenstring(m_bs, "k7/8/K/3R4/8/8/8/8 w KQkq - ");
+  initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
   m_ml = {};
 
   m_moveGenerator->startUp(m_bs, m_ml);
+}
+
+void Engine::tests()
+{
+  bool fail = false;
+  piece::BoardState bs;
+  auto test = [this, &bs, &fail](int testNr, const char* str,
+                                 uint64_t count) -> void {
+    using namespace std;
+
+    cout << "\nRunning test: " << testNr << endl;
+    setState(str, bs);
+
+    auto start = chrono::system_clock::now();
+    uint64_t perftCount = perft(6, bs);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_time = end - start;
+
+    std::cout << "Time: " << elapsed_time.count() << "s" << endl;
+    std::cout << "KN/s: "
+              << static_cast<double>(perftCount) / elapsed_time.count() / 1000
+              << endl;
+
+    if (count != perftCount)
+    {
+      std::cout << "Test " << testNr << " failed, expected:" << count
+                << " got: " << perftCount << std::endl;
+      fail = true;
+    }
+    else
+    {
+      std::cout << "Test " << testNr << " success!" << std::endl;
+    }
+  };
+
+  // TEST 1
+  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+       119060324ULL);
+
+  // TEST 2
+  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ",
+       8031647685ULL);
+
+  // TEST 3
+  test(3, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ", 11030083ULL);
+
+  // TEST 4
+  test(4, "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+       706045033ULL);
+
+  // TEST 5
+  test(5, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ",
+       89941194ULL);
+
+  // TEST 6
+  test(6,
+       "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 "
+       "10 ",
+       6923051137ULL);
+
+  if (!fail)
+  {
+    std::cout << "Current build cleared all tests" << std::endl;
+  }
+}
+
+void Engine::setState(const char* str, piece::BoardState& bs)
+{
+  bs = {};
+  initFenstring(bs, str);
+  piece::MoveList ml = {};
+  m_moveGenerator->startUp(bs, ml);
 }
 
 void Engine::initFenstring(piece::BoardState& bs, const char* str)
@@ -359,19 +498,28 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         if (done)
           bs.castlingRights |= 8;
         else
+        {
           bs.pieceBoards[pieces::q] |= space;
+          bs.pieceCount[pieces::q]++;
+        }
+
         break;
       case ('R'):
+
         bs.pieceBoards[pieces::r] |= space;
+        bs.pieceCount[pieces::r]++;
         break;
       case ('B'):
         bs.pieceBoards[pieces::b] |= space;
+        bs.pieceCount[pieces::b]++;
         break;
       case ('N'):
         bs.pieceBoards[pieces::n] |= space;
+        bs.pieceCount[pieces::n]++;
         break;
       case ('P'):
         bs.pieceBoards[pieces::p] |= space;
+        bs.pieceCount[pieces::p]++;
         break;
       case ('k'):
         if (done)
@@ -390,22 +538,31 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         if (done)
           bs.castlingRights |= 2;
         else
+        {
           bs.pieceBoards[pieces::q + 5] |= space;
+          bs.pieceCount[pieces::q + 5]++;
+        }
         break;
       case ('r'):
         bs.pieceBoards[pieces::r + 5] |= space;
+        bs.pieceCount[pieces::r + 5]++;
         break;
       case ('b'):
         if (done)
           bs.whiteTurn = 0;
         else
-          bs.pieceBoards[pieces::b + 5] |= space;
+        {
+          bs.pieceBoards[pieces::r + 5] |= space;
+          bs.pieceCount[pieces::r + 5]++;
+        }
         break;
       case ('n'):
         bs.pieceBoards[pieces::n + 5] |= space;
+        bs.pieceCount[pieces::n + 5]++;
         break;
       case ('p'):
         bs.pieceBoards[pieces::p + 5] |= space;
+        bs.pieceCount[pieces::p + 5]++;
         break;
       case ('w'):
         bs.whiteTurn = 1;

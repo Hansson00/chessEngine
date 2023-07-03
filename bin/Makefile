@@ -16,7 +16,7 @@ inc += ../inc/
 
 # Compile command
 main:
-	$(cc) $(file) -Wall -o main.out
+	$(cc) -o3 $(file) -Wall -o main.out
 
 debug:
 	$(cc) $(file) -Wall -g -o main.out

@@ -1,3 +1,10 @@
 *.out
 .clang-format
 .vscode/
+.vs/
+ConsoleChess.sln
+ConsoleChess.vcxproj
+ConsoleChess.vcxproj.filters
+ConsoleChess.vcxproj.user
+Debug/
+x64/

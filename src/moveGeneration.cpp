@@ -94,10 +94,12 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
         break;
       case 0b1:
       case 0b10:
+      case 0b11:
         movePiece<true, true, false>(bs, move);
         break;
       case 0b100:
       case 0b1000:
+      case 0b1100:
         movePiece<true, false, true>(bs, move);
         break;
       default:
@@ -195,9 +197,9 @@ void MoveGeneration::initPawnAttacks()
   constexpr uint64_t file1 = ~0x0101010101010101ULL;
   constexpr uint64_t file8 = ~0x8080808080808080ULL;
 
-  for (int i = 0; i < 48; i++)
+  for (int i = 0; i < 64; i++)
   {
-    uint64_t pawn = 1ULL << (i + 8);
+    uint64_t pawn = 1ULL << (i);
     uint64_t attack = 0;
     // Right
     attack |= (pawn & file8) << 9;
@@ -254,15 +256,15 @@ const inline uint64_t MoveGeneration::getRookAttacks(uint8_t square, uint64_t oc
   return m_rookAttacks[square][occupancy];
 }
 
-const uint64_t inline MoveGeneration::singlePawnAttack(uint8_t king, bool white)
+const uint64_t inline MoveGeneration::singlePawnAttack(uint8_t position, bool white)
 {
-  return m_pawnAttacks[!white][king];
+  return m_pawnAttacks[white][position];
 }
 
 template<bool whiteTurn>
 const void MoveGeneration::generatePawnAttacks(const BoardState& bs, uint64_t& attacks)
 {
-  const uint64_t attack_piece = whiteTurn ? bs.pieceBoards[4 + PIECE_OFFSET] : bs.pieceBoards[4];
+  const uint64_t attack_piece = bs.pieceBoards[4 + PIECE_OFFSET * whiteTurn];
 
   uint64_t pawn_left = attack_piece & ~(0x8080808080808080ULL - 0x7F7F7F7F7F7F7F7FULL * whiteTurn);
   uint64_t pawn_right = attack_piece & ~(0x0101010101010101ULL + 0x7F7F7F7F7F7F7F7FULL * whiteTurn);
@@ -391,13 +393,14 @@ const void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
   // Shifting attacks
   shiftSide<whiteTurn>(pawnRight, pawnLeft);
 
-  // Making sure the pawn is capturing and/or blocking when attacking
+  // CONFUSING NAMES?!
+  //  Making sure the pawn is capturing and/or blocking when attacking
   pawnLeft &= enemy & block;
   pawnRight &= enemy & block;
 
-  // PAWN LEFT
-  pawnBitScan<pins>(bs, ml, pawnLeft, pm.backLeft, moveModifiers::CAPTURE);
   // PAWN RIGHT
+  pawnBitScan<pins>(bs, ml, pawnLeft, pm.backLeft, moveModifiers::CAPTURE);
+  // PAWN LEFT
   pawnBitScan<pins>(bs, ml, pawnRight, pm.backRight, moveModifiers::CAPTURE);
 
   if (bs.enPassant)
@@ -423,6 +426,7 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
 {
   const uint32_t placePiece = move & moveModifiers::ATTACKERS;
 
+  // shit code here ->
   unsigned long attackerSquare;
   _BitScanForward64(&attackerSquare, placePiece);
 
@@ -712,8 +716,8 @@ const void MoveGeneration::generatePinsBlocks(BoardState& bs)
                                bs.pieceBoards[1 + PIECE_OFFSET * whiteTurn]) &
                               x_ray_straigt;
 
-  const uint64_t pawns = singlePawnAttack(king, bs.whiteTurn) & GETENEMYPIECES(4);
-  const uint64_t knights = m_knightAttacks[king] & GETENEMYPIECES(3);
+  const uint64_t pawns = singlePawnAttack(king, !whiteTurn) & bs.pieceBoards[4 + PIECE_OFFSET * whiteTurn];
+  const uint64_t knights = m_knightAttacks[king] & bs.pieceBoards[3 + PIECE_OFFSET * whiteTurn];
 
   if (pawns)
   {
@@ -861,7 +865,7 @@ const void MoveGeneration::generateCastlingOptions(BoardState& bs)
 template<bool whiteTurn>
 const void MoveGeneration::enPassantHelper(const BoardState& bs, MoveList& ml, uint64_t& epPosBitboard)
 {
-  uint64_t epPosAttacks = m_pawnAttacks[whiteTurn][bs.enPassant] & bs.teamBoards[2 - whiteTurn];
+  uint64_t epPosAttacks = singlePawnAttack(bs.enPassant, whiteTurn) & bs.pieceBoards[9 - whiteTurn * 5];
   // Get king row and check if it is not 5 or 4 (white, black)
   const bool kingNotInDanger = !((bs.kings[!whiteTurn] >> 3) == (whiteTurn ? 4 : 3));
   unsigned long dest;
@@ -902,7 +906,7 @@ const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, u
       }
     }
 
-    uint64_t promoAttacks = m_pawnAttacks[!whiteTurn][dest - 8] & bs.teamBoards[1 + whiteTurn] & bs.blockMask;
+    uint64_t promoAttacks = singlePawnAttack(!whiteTurn, dest) & bs.teamBoards[1 + whiteTurn] & bs.blockMask;
     unsigned long attackSquare;
     while (promoAttacks)
     {
@@ -1033,9 +1037,14 @@ void MoveGeneration::pawnBitScan(const BoardState& bs, MoveList& ml, uint64_t& p
     if constexpr (pins)
     {
       const uint64_t startBitboard = 1ULL << (dest + dir);
-      const uint64_t endBitboard = 1ULL < dest;
+      const uint64_t endBitboard = 1ULL << dest;
+      // TODO not ? please!
+      // GUI::printBitBoard(startBitboard);
+      // GUI::printBitBoard(endBitboard);
+      // GUI::printBitBoard(bs.pinnedSquares);
+      // GUI::printBitBoard((((dir & 7) == 0) ? pinnedStraight(bs.kings[!bs.whiteTurn], dest) : pinnedDiagonal(bs.kings[!bs.whiteTurn], dest)));
 
-      if (!(startBitboard & bs.pinnedSquares) || (endBitboard & bs.pinnedSquares & ((abs(dir) == 8) ? pinnedStraight(bs.kings[!bs.whiteTurn], dest) : pinnedDiagonal(bs.kings[!bs.whiteTurn], dest))))
+      if (!(startBitboard & bs.pinnedSquares) || (endBitboard & bs.pinnedSquares & (((dir & 7) == 0) ? pinnedStraight(bs.kings[!bs.whiteTurn], dest) : pinnedDiagonal(bs.kings[!bs.whiteTurn], dest))))
       {
         ml.add((dest + dir) | dest << 6 | moveModifiers::pawn | move_type);
       }

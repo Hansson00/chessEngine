@@ -6,7 +6,7 @@
 #include <iostream>
 #include <stdint.h>
 
-// #define PARSE_TO_FILE
+#define PARSE_TO_FILE
 
 Engine::Engine()
 {
@@ -381,9 +381,9 @@ void Engine::moveParser(uint32_t move)
 void Engine::resetState()
 {
   m_bs = {};
-  // initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   // initFenstring(m_bs, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq");
-  initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
+  // initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
   m_ml = {};
 
   m_moveGenerator->startUp(m_bs, m_ml);
@@ -423,12 +423,10 @@ void Engine::tests()
   };
 
   // TEST 1
-  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-       119060324ULL);
+  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 119060324ULL);
 
   // TEST 2
-  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ",
-       8031647685ULL);
+  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ", 8031647685ULL);
 
   // TEST 3
   test(3, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ", 11030083ULL);
@@ -505,7 +503,6 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
 
         break;
       case ('R'):
-
         bs.pieceBoards[pieces::r] |= space;
         bs.pieceCount[pieces::r]++;
         break;
@@ -552,8 +549,8 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
           bs.whiteTurn = 0;
         else
         {
-          bs.pieceBoards[pieces::r + 5] |= space;
-          bs.pieceCount[pieces::r + 5]++;
+          bs.pieceBoards[pieces::b + 5] |= space;
+          bs.pieceCount[pieces::b + 5]++;
         }
         break;
       case ('n'):

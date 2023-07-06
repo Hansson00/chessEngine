@@ -108,13 +108,12 @@ struct BoardState
 
 struct MoveList
 {
-  uint32_t move[50];
+  uint32_t move[100];
   uint8_t end = 0;
 
   void inline add(uint32_t newMove)
   {
     move[end++] = newMove;
-    // moveVisualizerTEMP(newMove);
   }
   void inline reset()
   {

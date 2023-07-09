@@ -41,6 +41,7 @@ private:
   void initKingAttacks();
   void initKnightAttacks();
   void initPawnAttacks();
+  void initKingDivide();
 
   // Attack functions
   template<piece::pieceType P>
@@ -106,8 +107,6 @@ private:
   template<bool whiteTurn>
   const bool checkPinEP(const BoardState& bs, uint32_t start_pos);
 
-  std::function<uint64_t(uint8_t, uint64_t)> m_rowAttacks_f;
-
   static constexpr uint8_t whitePawns = 4;
   static constexpr uint8_t blackPawns = 9;
 
@@ -120,9 +119,11 @@ private:
   static constexpr PawnMoves whiteMoves = {-8, -16, -7, -9};
   static constexpr PawnMoves blackMoves = {8, 16, 7, 9};
   // Memeber variables
+
   uint64_t m_kingAttacks[64];
   uint64_t m_knightAttacks[64];
-  uint64_t m_pawnAttacks[2][56];
+  uint64_t m_pawnAttacks[2][64];
+  uint64_t m_kingDivide[64];
 };
 
 }  // namespace piece

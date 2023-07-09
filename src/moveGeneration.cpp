@@ -11,6 +11,7 @@ MoveGeneration::MoveGeneration()
   initKingAttacks();
   initKnightAttacks();
   initPawnAttacks();
+  initKingDivide();
 }
 
 ////////////////////////////////////////////////////////////////
@@ -215,6 +216,17 @@ void MoveGeneration::initPawnAttacks()
   }
 }
 
+void MoveGeneration::initKingDivide()
+{
+  uint64_t kingDivide = 0;
+
+  for (int i = 0; i < 64; i++)
+  {
+    kingDivide += 1ULL << i;
+    m_kingDivide[i] = kingDivide;
+  }
+}
+
 ////////////////////////////////////////////////////////////////
 // Attacks
 ////////////////////////////////////////////////////////////////
@@ -350,6 +362,8 @@ const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
       {
         moves = (bs.pinnedSquares ^ pinnedPiece) & pinnedDiagonal(bs.kings[!whiteTurn], piece);
       }
+      const uint64_t king = bs.kings[!whiteTurn];
+      moves &= (piece < king) ? m_kingDivide[king] : ~m_kingDivide[king];
     }
     else
     {
@@ -872,8 +886,11 @@ const void MoveGeneration::enPassantHelper(const BoardState& bs, MoveList& ml, u
   while (epPosAttacks)
   {
     _BitScanForward64(&dest, epPosAttacks);
-    if ((kingNotInDanger || !checkPinEP<whiteTurn>(bs, dest)) &&
-        (!((1ULL << dest) & bs.pinnedSquares) || (epPosBitboard & bs.pinnedSquares & pinnedDiagonal(bs.kings[!whiteTurn], bs.enPassant))))
+    const bool kingSpecialEP = (kingNotInDanger || !checkPinEP<whiteTurn>(bs, dest));
+    const bool notPinnedStartSquare = !((1ULL << dest) & bs.pinnedSquares);
+    const bool ifPinnedAndInLineWithKing = (epPosBitboard & bs.pinnedSquares & pinnedDiagonal(bs.kings[!whiteTurn], bs.enPassant));
+
+    if (kingSpecialEP && (notPinnedStartSquare || ifPinnedAndInLineWithKing))
     {
       ml.add(dest | ((uint16_t)bs.enPassant) << 6 | moveModifiers::pawn | moveModifiers::EN_PESSANT_CAP);
     }
@@ -906,7 +923,7 @@ const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, u
       }
     }
 
-    uint64_t promoAttacks = singlePawnAttack(!whiteTurn, dest) & bs.teamBoards[1 + whiteTurn] & bs.blockMask;
+    uint64_t promoAttacks = singlePawnAttack(dest, !whiteTurn) & bs.teamBoards[1 + whiteTurn] & bs.blockMask;
     unsigned long attackSquare;
     while (promoAttacks)
     {
@@ -1078,7 +1095,7 @@ const bool MoveGeneration::checkPinEP(const BoardState& bs, const uint32_t start
       {
         _BitScanForward64(&slidePos, sliders);
 
-        attacks |= m_rowAttacks_f(board, slidePos);
+        attacks |= getRookAttacks(slidePos, board);
         sliders &= sliders - 1;
       }
       return attacks & (1ULL << king);

@@ -6,7 +6,7 @@
 #include <iostream>
 #include <stdint.h>
 
-#define PARSE_TO_FILE
+// #define PARSE_TO_FILE
 
 Engine::Engine()
 {
@@ -384,6 +384,8 @@ void Engine::resetState()
   initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   // initFenstring(m_bs, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq");
   // initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
+  // initFenstring(m_bs, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ");
+  // initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
   m_ml = {};
 
   m_moveGenerator->startUp(m_bs, m_ml);
@@ -402,48 +404,60 @@ void Engine::tests()
 
     auto start = chrono::system_clock::now();
     uint64_t perftCount = perft(6, bs);
-    auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_time = end - start;
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsed_time = end - start;
 
-    std::cout << "Time: " << elapsed_time.count() << "s" << endl;
-    std::cout << "KN/s: "
-              << static_cast<double>(perftCount) / elapsed_time.count() / 1000
-              << endl;
+    cout << "Time: " << elapsed_time.count() << "s" << endl;
+    cout << "KN/s: "
+         << static_cast<double>(perftCount) / elapsed_time.count() / 1000
+         << endl;
 
     if (count != perftCount)
     {
-      std::cout << "Test " << testNr << " failed, expected:" << count
-                << " got: " << perftCount << std::endl;
+      cout << "Test " << testNr
+           << " failed, expected:" << count
+           << " got: " << perftCount << endl
+           << "Fen: " << str << endl;
       fail = true;
     }
     else
     {
-      std::cout << "Test " << testNr << " success!" << std::endl;
+      cout << "Test " << testNr << " success!" << endl;
     }
   };
 
-  // TEST 1
-  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 119060324ULL);
+  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+       119060324ULL);
 
-  // TEST 2
-  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ", 8031647685ULL);
+  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ",
+       8031647685ULL);
 
-  // TEST 3
-  test(3, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ", 11030083ULL);
+  test(3, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
+       11030083ULL);
 
-  // TEST 4
   test(4, "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
        706045033ULL);
 
-  // TEST 5
   test(5, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ",
-       89941194ULL);
+       3048196529ULL);
 
-  // TEST 6
-  test(6,
-       "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 "
-       "10 ",
+  test(6, "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ",
        6923051137ULL);
+
+  test(7, "nnbrkqrb/p2ppp2/Q5pp/1pp5/4PP2/2N5/PPPP2PP/N1BRK1RB w KQkq - 0 9",
+       630396940ULL);
+
+  test(8, "qbnrb1kr/ppp1pp1p/3p4/2n3p1/1P6/6N1/P1PPPPPP/QBNRB1KR w KQkq - 2 9",
+       530475036ULL);
+
+  test(9, "nr1bbqkr/pp1pp2p/1n3pp1/2p5/8/1P4P1/P1PPPPQP/NRNBBK1R w kq - 0 9",
+       320997679ULL);
+
+  test(10, "qn1rk1rb/p1pppppp/1p2n3/8/2b5/4NPP1/PPPPP1RP/QNBRK2B w Qkq - 4 9",
+       650603534ULL);
+
+  test(11, "nrknr1bb/pppp1p2/7p/2qPp1p1/8/1P5P/P1P1PPP1/NRKNRQBB w KQkq - 0 9",
+       386064577ULL);
 
   if (!fail)
   {
@@ -481,7 +495,7 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
     {
       case ('K'):
         if (done)
-          bs.castlingRights |= 4;
+          bs.castlingRights |= 0b1;
         else
         {
           // bs->pieceBoards[0] |= space;
@@ -494,7 +508,7 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         break;
       case ('Q'):
         if (done)
-          bs.castlingRights |= 8;
+          bs.castlingRights |= 0b10;
         else
         {
           bs.pieceBoards[pieces::q] |= space;
@@ -520,7 +534,7 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         break;
       case ('k'):
         if (done)
-          bs.castlingRights |= 1;
+          bs.castlingRights |= 0b100;
         else
         {
           // bs->pieceBoards[6] |= space;
@@ -533,7 +547,7 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         break;
       case ('q'):
         if (done)
-          bs.castlingRights |= 2;
+          bs.castlingRights |= 0b1000;
         else
         {
           bs.pieceBoards[pieces::q + 5] |= space;

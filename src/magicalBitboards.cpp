@@ -270,9 +270,9 @@ void MagicalBitboards::initSliderAttacks()
 uint64_t randomNumber()
 {
   uint64_t random1 = static_cast<uint64_t>(std::rand()) | (static_cast<uint64_t>(std::rand()) << 16) | (static_cast<uint64_t>(std::rand()) << 32) | (static_cast<uint64_t>(std::rand()) << 48);
-  uint64_t random2 = static_cast<uint64_t>(std::rand()) | (static_cast<uint64_t>(std::rand()) << 16) | (static_cast<uint64_t>(std::rand()) << 32) | (static_cast<uint64_t>(std::rand()) << 48);
-  // uint64_t random3 = static_cast<uint64_t>(std::rand()) | (static_cast<uint64_t>(std::rand()) << 16) | (static_cast<uint64_t>(std::rand()) << 32) | (static_cast<uint64_t>(std::rand()) << 48);
-  return random1 & random2;  // & random3;
+  // uint64_t random2 = static_cast<uint64_t>(std::rand()) | (static_cast<uint64_t>(std::rand()) << 16) | (static_cast<uint64_t>(std::rand()) << 32) | (static_cast<uint64_t>(std::rand()) << 48);
+  //  uint64_t random3 = static_cast<uint64_t>(std::rand()) | (static_cast<uint64_t>(std::rand()) << 16) | (static_cast<uint64_t>(std::rand()) << 32) | (static_cast<uint64_t>(std::rand()) << 48);
+  return random1;  //& random2;  // & random3;
 }
 
 }  // namespace magicalBits

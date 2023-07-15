@@ -1,6 +1,7 @@
 
 #pragma once
 #include <intrin.h>
+#include <stdint.h>
 #include <cinttypes>
 #include <iostream>
 
@@ -90,7 +91,7 @@ struct BoardState
   // 5-9 black Queen, black Rook, black Bishop, black Knight, black Pawn
   uint64_t pieceBoards[10] = {};
   uint64_t teamBoards[3] = {};
-  uint8_t pieceCount[10] = {};
+  // uint8_t pieceCount[10] = {};
   // Mask for pieces that are pinned to the king
   uint64_t pinnedSquares = 0;
 
@@ -102,8 +103,35 @@ struct BoardState
   uint8_t numCheckers = 0;
   uint8_t castlingRights = 0;
   uint8_t enPassant = 0;
-
+  uint8_t turns = 0;
   bool whiteTurn = 1;
+  uint64_t hash;
+  /*
+    friend bool operator==(BoardState& l, BoardState& r)
+    {
+      int eq = 0;
+      for (int i = 0; i < 10; i++)
+      {
+        eq += l.pieceBoards[i] == r.pieceBoards[i];
+      }
+      eq += l.teamBoards[0] == r.teamBoards[0];
+      eq += l.teamBoards[1] == r.teamBoards[1];
+      eq += l.teamBoards[2] == r.teamBoards[2];
+
+      eq += l.kings[0] == r.kings[0];
+      eq += l.kings[1] == r.kings[1];
+
+      eq += l.pinnedSquares == r.pinnedSquares;
+      eq += l.blockMask == r.blockMask;
+      eq += l.attacks == r.attacks;
+      eq += l.numCheckers == r.numCheckers;
+      eq += l.castlingRights == r.castlingRights;
+      eq += l.enPassant == r.enPassant;
+      eq += l.turns == r.turns;
+      eq += l.whiteTurn == r.whiteTurn;
+
+      return eq == 23;
+    }*/
 };
 
 struct MoveList

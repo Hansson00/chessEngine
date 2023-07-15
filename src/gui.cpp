@@ -73,9 +73,7 @@ void m_printBoard()
 void moveVisualizer(uint32_t move)
 {
   const char piece[6] = {'k', 'q', 'r', 'b', 'n', 'p'};
-
   char c_board[8 * 9 + 1] = {};  // xxxxxxxx + \n and 0 at the end
-
   unsigned long bit;
 
   _BitScanForward(&bit, ((move & piece::moveModifiers::ATTACKERS) >> 12));
@@ -197,7 +195,7 @@ void printFenString(const piece::BoardState& bs)
     std::cout << 'q';
   }
 
-  std::cout << std::endl;
+  std::cout << "\nTurns: " << (int)bs.turns << std::endl;
 }
 
 }  // namespace GUI

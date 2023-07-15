@@ -2,6 +2,7 @@
 #include "../inc/moveGeneration.h"
 #include "../inc/gui.h"
 #include <intrin.h>
+#include "../inc/zobristHash.h"
 
 namespace piece
 {
@@ -108,6 +109,7 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
         break;
     }
     bs.whiteTurn ^= 1;
+    bs.turns++;
     generateAttacks<false>(bs);
     generatePinsBlocks<false>(bs);
 
@@ -136,6 +138,7 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
     }
 
     bs.whiteTurn ^= 1;
+    bs.turns++;
     generateAttacks<true>(bs);
     generatePinsBlocks<true>(bs);
 
@@ -346,24 +349,29 @@ const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
   {
     uint64_t moves = 0;
     _BitScanForward64(&piece, movingPieces);
+    movingPieces &= movingPieces - 1;
     uint64_t pinnedPiece = (1ULL << piece);
     if (pinnedPiece & bs.pinnedSquares)
     {
       if constexpr (p == piece::pieceType::Queen)
       {
-        moves = (bs.pinnedSquares ^ pinnedPiece) & pinnedStraight(bs.kings[!whiteTurn], piece);
-        moves |= (bs.pinnedSquares ^ pinnedPiece) & pinnedDiagonal(bs.kings[!whiteTurn], piece);
+        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves &= pinnedStraight(bs.kings[!whiteTurn], piece) | pinnedDiagonal(bs.kings[!whiteTurn], piece);
       }
       if constexpr (p == piece::pieceType::Rook)
       {
-        moves = (bs.pinnedSquares ^ pinnedPiece) & pinnedStraight(bs.kings[!whiteTurn], piece);
+        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves &= pinnedStraight(bs.kings[!whiteTurn], piece);
       }
       if constexpr (p == piece::pieceType::Bishop)
       {
-        moves = (bs.pinnedSquares ^ pinnedPiece) & pinnedDiagonal(bs.kings[!whiteTurn], piece);
+        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves &= pinnedDiagonal(bs.kings[!whiteTurn], piece);
       }
-      const uint64_t king = bs.kings[!whiteTurn];
-      moves &= (piece < king) ? m_kingDivide[king] : ~m_kingDivide[king];
+      if constexpr (p == piece::pieceType::Knight)
+      {
+        continue;
+      }
     }
     else
     {
@@ -371,7 +379,6 @@ const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
     }
     moves &= bs.blockMask;
     generateMultipleMoves<p>(board, moves, piece, ml);
-    movingPieces &= movingPieces - 1;
   }
 }
 
@@ -460,8 +467,7 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
     bs.teamBoards[2] ^= startBitboard | endBitboard;
   }
 
-  bs.enPassant = ((endSquare + 8) - (16 * bs.whiteTurn)) *
-                 ((move & moveModifiers::DPUSH) != 0);
+  bs.enPassant = ((endSquare + 8) - (16 * bs.whiteTurn)) * ((move & moveModifiers::DPUSH) != 0);
 
   // if it's the king
   if (attackerSquare == 12)
@@ -762,7 +768,7 @@ const void MoveGeneration::generatePinsBlocks(BoardState& bs)
     }
     uint64_t temp_pin_mask = 0;
     uint8_t pieces = 0;
-    for (int i = 1; i < 7; i++)
+    for (int i = 1; i < 8; i++)
     {
       uint64_t pos = 1ULL << (king + way * i);
       temp_pin_mask |= pos;

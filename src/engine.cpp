@@ -4,12 +4,14 @@
 #include <fstream>
 #include <intrin.h>
 #include <iostream>
+#include <utility>
 #include <stdint.h>
 
-// #define PARSE_TO_FILE
+#define PARSE_TO_FILE
 
 Engine::Engine()
 {
+  m_zobristHash = new zobristHash::ZobristHash();
   GUI::m_setup();
   m_moveGenerator = new piece::MoveGeneration();
   resetState();
@@ -20,6 +22,7 @@ Engine::Engine()
 Engine::~Engine()
 {
   delete (m_moveGenerator);
+  delete (m_zobristHash);
 }
 
 void Engine::run()
@@ -103,6 +106,34 @@ void Engine::engineInterface()
   {
     tests();
   }
+  else if (strcmp(str.c_str(), "findKey") == 0)
+  {
+    findKey();
+  }
+  else if (strcmp(token.c_str(), "fen") == 0)
+  {
+    resetState(str.substr(temp + 1, str.length()));
+  }
+}
+
+void Engine::findKey()
+{
+  /*
+  for (auto& state1 : boardStates)
+  {
+    for (auto& state2 : boardStates)
+    {
+      if (!(*state1 == *state2))
+      {
+        GUI::printToConsole(*state1);
+        GUI::printFenString(*state1);
+
+        GUI::printToConsole(*state2);
+        GUI::printFenString(*state2);
+      }
+    }
+  }
+  */
 }
 
 std::string Engine::getInput()
@@ -232,7 +263,8 @@ uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
   std::ofstream myfile;
   myfile.open("moves.txt");
 #endif
-  uint64_t num_positions = 0;
+  uint16_t hashHits = 0;
+  uint64_t numPositions = 0;
   piece::BoardState current = bs;
 
   piece::MoveList ml;
@@ -241,8 +273,8 @@ uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
   for (uint32_t i = 0; i < ml.end && i < 100; i++)
   {
     m_moveGenerator->makeMove(current, ml.move[i]);
-    uint32_t part = search(depth - 1, current);
-    num_positions += part;
+    uint32_t part = search(depth - 1, current, hashHits);
+    numPositions += part;
     current = bs;
 #ifdef PARSE_TO_FILE
     moveParserToFile(ml.move[i], myfile);
@@ -255,20 +287,32 @@ uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
 #ifdef PARSE_TO_FILE
   myfile.close();
 #endif
-  std::cout << "\nTotal: ";
-  std::cout << num_positions << std::endl;
+  std::cout << "\nTotal: " << numPositions << std::endl;
+  std::cout << "Hash hits: " << hashHits << std::endl;
+  moveHash.clear();
 
-  return num_positions;
+  addBoardStates = true;
+  return numPositions;
 }
 
-uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs)
+uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs, uint16_t& hashHits)
 {
   if (depth == 0)
     return 1;
 
-  uint32_t num_positions = 0;
-  piece::BoardState current = bs;
+  uint64_t hash;
+  if (depth > 1)
+  {
+    hash = m_zobristHash->zobristHash(bs);
+    if (moveHash.find(hash) != moveHash.end())
+    {
+      hashHits++;
+      return moveHash.at(hash);
+    }
+  }
 
+  uint32_t numPositions = 0;
+  piece::BoardState current = bs;
   // Get legal moves for current position
   piece::MoveList ml;
   m_moveGenerator->generatePossibleMoves(current, ml);
@@ -279,11 +323,44 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs)
   for (uint32_t i = 0; i < ml.end && i < 100; i++)
   {
     m_moveGenerator->makeMove(current, ml.move[i]);
-    uint32_t part = search(depth - 1, current);
-    num_positions += part;
+    uint32_t part = search(depth - 1, current, hashHits);
+    numPositions += part;
     current = bs;
   }
-  return num_positions;
+
+  if (depth > 1)
+  {
+    // hash = m_zobristHash->zobristHash(bs);
+    // if (addBoardStates)
+    //{
+    //   if (hash == firstMiss)
+    //   {
+    //     hashHits++;
+    //     piece::BoardState* newBs = new piece::BoardState();
+    //     *newBs = bs;
+    //     boardStates.emplace_back(newBs);
+    //   }
+    // }
+    // else
+    //{
+    //   if (moveHash.find(hash) != moveHash.end())
+    //   {
+    //     if (moveHash.at(hash) != numPositions)
+    //     {
+    //       hashHits++;
+    //       std::cout << "Invalid hash: " << hash << std::endl;
+    //       if (firstMiss == 0)
+    //       {
+    //         firstMiss = hash;
+    //       }
+    //     }
+    //   }
+    // }
+
+    moveHash[hash] = numPositions;
+  }
+
+  return numPositions;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -378,14 +455,14 @@ void Engine::moveParser(uint32_t move)
   }
 }
 
-void Engine::resetState()
+void Engine::resetState(std::string position)
 {
+  while (m_prevStates.size())
+  {
+    m_prevStates.pop();
+  }
   m_bs = {};
-  initFenstring(m_bs, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-  // initFenstring(m_bs, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq");
-  // initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
-  // initFenstring(m_bs, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ");
-  // initFenstring(m_bs, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ");
+  initFenstring(m_bs, position.c_str());
   m_ml = {};
 
   m_moveGenerator->startUp(m_bs, m_ml);
@@ -395,15 +472,16 @@ void Engine::tests()
 {
   bool fail = false;
   piece::BoardState bs;
-  auto test = [this, &bs, &fail](int testNr, const char* str,
-                                 uint64_t count) -> void {
+  int testNr = 1;
+  auto test = [&](const char* str,
+                  uint64_t count, uint8_t perftLevel = 6) -> void {
     using namespace std;
 
     cout << "\nRunning test: " << testNr << endl;
     setState(str, bs);
 
     auto start = chrono::system_clock::now();
-    uint64_t perftCount = perft(6, bs);
+    uint64_t perftCount = perft(perftLevel, bs);
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsed_time = end - start;
 
@@ -424,40 +502,32 @@ void Engine::tests()
     {
       cout << "Test " << testNr << " success!" << endl;
     }
+    testNr++;
   };
 
-  test(1, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-       119060324ULL);
+  test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 119060324ULL, 6);
+  // test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ", 8031647685ULL, 6);
+  test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ", 11030083ULL, 6);
+  test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 706045033ULL, 6);
+  test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ", 3048196529ULL, 6);
 
-  test(2, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ",
-       8031647685ULL);
+  test("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ", 6923051137ULL, 6);
+  test("3k4/3p4/8/K1P4r/8/8/8/8 b - - 0 1", 130459988ULL, 8);
+  test("8/8/4k3/8/2p5/8/B2P2K1/8 w - - 0 1", 102503850ULL, 8);
+  // test("8/8/1k6/2b5/2pP4/8/5K2/8 b - d3 0 1", 1440467ULL, 6);
+  test("5k2/8/8/8/8/8/8/4K2R w K - 0 1", 73450134ULL, 8);
+  test("3k4/8/8/8/8/8/8/R3K3 w Q - 0 1", 91628014ULL, 8);
 
-  test(3, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - ",
-       11030083ULL);
+  test("r3k2r/1b4bq/8/8/8/8/7B/R3K2R w KQkq - 0 1", 1509218880ULL, 6);
+  test("r3k2r/8/3Q4/8/8/5q2/8/R3K2R b KQkq - 0 1", 2010267707ULL, 6);
+  test("2K2r2/4P3/8/8/8/8/8/3k4 w - - 0 1", 905613447ULL, 8);
+  test("8/8/1P2K3/8/2n5/1q6/8/5k2 b - - 0 1", 197013195ULL, 7);
+  test("4k3/1P6/8/8/8/8/K7/8 w - - 0 1", 397481663ULL, 9);
 
-  test(4, "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
-       706045033ULL);
-
-  test(5, "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ",
-       3048196529ULL);
-
-  test(6, "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ",
-       6923051137ULL);
-
-  test(7, "nnbrkqrb/p2ppp2/Q5pp/1pp5/4PP2/2N5/PPPP2PP/N1BRK1RB w KQkq - 0 9",
-       630396940ULL);
-
-  test(8, "qbnrb1kr/ppp1pp1p/3p4/2n3p1/1P6/6N1/P1PPPPPP/QBNRB1KR w KQkq - 2 9",
-       530475036ULL);
-
-  test(9, "nr1bbqkr/pp1pp2p/1n3pp1/2p5/8/1P4P1/P1PPPPQP/NRNBBK1R w kq - 0 9",
-       320997679ULL);
-
-  test(10, "qn1rk1rb/p1pppppp/1p2n3/8/2b5/4NPP1/PPPPP1RP/QNBRK2B w Qkq - 4 9",
-       650603534ULL);
-
-  test(11, "nrknr1bb/pppp1p2/7p/2qPp1p1/8/1P5P/P1P1PPP1/NRKNRQBB w KQkq - 0 9",
-       386064577ULL);
+  test("8/P1k5/K7/8/8/8/8/8 w - - 0 1", 153850274ULL, 9);
+  test("K1k5/8/P7/8/8/8/8/8 w - - 0 1", 85822924ULL, 11);
+  test("8/k1P5/8/1K6/8/8/8/8 w - - 0 1", 173596091ULL, 10);
+  test("8/8/2k5/5q2/5n2/8/5K2/8 b - - 0 1", 104644508ULL, 7);
 
   if (!fail)
   {
@@ -512,25 +582,25 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::q] |= space;
-          bs.pieceCount[pieces::q]++;
+          // bs.pieceCount[pieces::q]++;
         }
 
         break;
       case ('R'):
         bs.pieceBoards[pieces::r] |= space;
-        bs.pieceCount[pieces::r]++;
+        // bs.pieceCount[pieces::r]++;
         break;
       case ('B'):
         bs.pieceBoards[pieces::b] |= space;
-        bs.pieceCount[pieces::b]++;
+        // bs.pieceCount[pieces::b]++;
         break;
       case ('N'):
         bs.pieceBoards[pieces::n] |= space;
-        bs.pieceCount[pieces::n]++;
+        // bs.pieceCount[pieces::n]++;
         break;
       case ('P'):
         bs.pieceBoards[pieces::p] |= space;
-        bs.pieceCount[pieces::p]++;
+        // bs.pieceCount[pieces::p]++;
         break;
       case ('k'):
         if (done)
@@ -551,12 +621,12 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::q + 5] |= space;
-          bs.pieceCount[pieces::q + 5]++;
+          // bs.pieceCount[pieces::q + 5]++;
         }
         break;
       case ('r'):
         bs.pieceBoards[pieces::r + 5] |= space;
-        bs.pieceCount[pieces::r + 5]++;
+        // bs.pieceCount[pieces::r + 5]++;
         break;
       case ('b'):
         if (done)
@@ -564,16 +634,16 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::b + 5] |= space;
-          bs.pieceCount[pieces::b + 5]++;
+          // bs.pieceCount[pieces::b + 5]++;
         }
         break;
       case ('n'):
         bs.pieceBoards[pieces::n + 5] |= space;
-        bs.pieceCount[pieces::n + 5]++;
+        // bs.pieceCount[pieces::n + 5]++;
         break;
       case ('p'):
         bs.pieceBoards[pieces::p + 5] |= space;
-        bs.pieceCount[pieces::p + 5]++;
+        // bs.pieceCount[pieces::p + 5]++;
         break;
       case ('w'):
         bs.whiteTurn = 1;
@@ -602,4 +672,6 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
     bs.teamBoards[1] |= bs.pieceBoards[i];
     bs.teamBoards[2] |= bs.pieceBoards[i + 5];
   }
+
+  bs.hash = m_zobristHash->zobristHash(bs);
 }

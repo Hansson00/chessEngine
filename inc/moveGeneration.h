@@ -2,7 +2,7 @@
 
 #include <cinttypes>
 #include <stdint.h>
-
+#include "../inc/zobristHash.h"
 #include "boardUtil.h"
 #include "magicalBitboards.h"
 
@@ -20,7 +20,7 @@ struct PawnMoves
 class MoveGeneration : private magicalBits::MagicalBitboards
 {
 public:
-  MoveGeneration();
+  MoveGeneration(zobristHash::ZobristHash* zh);
   ~MoveGeneration() = default;
 
   // Generation
@@ -120,6 +120,7 @@ private:
   static constexpr PawnMoves blackMoves = {8, 16, 7, 9};
   // Memeber variables
 
+  zobristHash::ZobristHash* m_zobristHash;
   uint64_t m_kingAttacks[64];
   uint64_t m_knightAttacks[64];
   uint64_t m_pawnAttacks[2][64];

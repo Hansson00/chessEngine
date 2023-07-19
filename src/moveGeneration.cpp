@@ -2,12 +2,12 @@
 #include "../inc/moveGeneration.h"
 #include "../inc/gui.h"
 #include <intrin.h>
-#include "../inc/zobristHash.h"
 
 namespace piece
 {
 
-MoveGeneration::MoveGeneration()
+MoveGeneration::MoveGeneration(zobristHash::ZobristHash* zh)
+    : m_zobristHash(zh)
 {
   initKingAttacks();
   initKnightAttacks();
@@ -108,8 +108,12 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
         movePiece<true, true, true>(bs, move);
         break;
     }
+    bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
+
+    bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
+    bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<false>(bs);
     generatePinsBlocks<false>(bs);
 
@@ -137,13 +141,17 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
         break;
     }
 
+    bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
+    bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
+    bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<true>(bs);
     generatePinsBlocks<true>(bs);
 
     bs.castlingRights &= 0b1111;
 
+    // Todo: Add caslting moves here
     if (!bs.numCheckers && bs.castlingRights & 0b11)
       generateCastlingOptions<true>(bs);
   }
@@ -445,6 +453,8 @@ const void MoveGeneration::generatePawnMoves(const BoardState& bs, MoveList& ml)
 template<bool whiteTurn, bool castlingAllowed, bool enemyCastlingAllowed>
 const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
 {
+  bs.hash ^= m_zobristHash->castleHash[bs.castlingRights & 0b1111];
+
   const uint32_t placePiece = move & moveModifiers::ATTACKERS;
 
   // shit code here ->
@@ -467,53 +477,66 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
     bs.teamBoards[2] ^= startBitboard | endBitboard;
   }
 
-  bs.enPassant = ((endSquare + 8) - (16 * bs.whiteTurn)) * ((move & moveModifiers::DPUSH) != 0);
+  if ((move & moveModifiers::DPUSH) || bs.enPassant)
+  {
+    bs.hash ^= m_zobristHash->epHash[(bs.enPassant & 7)] * (bs.enPassant != 0);
+    bs.enPassant = ((endSquare + 8) - (16 * bs.whiteTurn)) * ((move & moveModifiers::DPUSH) != 0);
+    bs.hash ^= m_zobristHash->epHash[(bs.enPassant & 7)] * (bs.enPassant != 0);
+  }
 
   // if it's the king
   if (attackerSquare == 12)
   {
     if constexpr (whiteTurn)
     {
+      bs.hash ^= m_zobristHash->pieceHashTable[10][bs.kings[0]];
       bs.kings[0] = endSquare;
+      bs.hash ^= m_zobristHash->pieceHashTable[10][bs.kings[0]];
       if constexpr (castlingAllowed)
       {
         // Castling
         if (move & moveModifiers::CASTLE_KING)
         {
-          const uint64_t castle = castlingRookStartPos<whiteTurn, true>() |
-                                  castlingRookEndPos<whiteTurn, true>();
+          const uint64_t castle = castlingRookStartPos<whiteTurn, true>() | castlingRookEndPos<whiteTurn, true>();
           bs.pieceBoards[1] ^= castle;
           bs.teamBoards[1] ^= castle;
+          bs.hash ^= m_zobristHash->pieceHashTable[1][7];
+          bs.hash ^= m_zobristHash->pieceHashTable[1][5];
         }
         else if (move & moveModifiers::CASTLE_QUEEN)
         {
-          const uint64_t castle = castlingRookStartPos<whiteTurn, false>() |
-                                  castlingRookEndPos<whiteTurn, false>();
+          const uint64_t castle = castlingRookStartPos<whiteTurn, false>() | castlingRookEndPos<whiteTurn, false>();
           bs.pieceBoards[1] ^= castle;
           bs.teamBoards[1] ^= castle;
+          bs.hash ^= m_zobristHash->pieceHashTable[1][0];
+          bs.hash ^= m_zobristHash->pieceHashTable[1][3];
         }
         bs.castlingRights &= ~0b0011;
       }
     }
     else
     {
+      bs.hash ^= m_zobristHash->pieceHashTable[11][bs.kings[1]];
       bs.kings[1] = endSquare;
+      bs.hash ^= m_zobristHash->pieceHashTable[11][bs.kings[1]];
       if constexpr (castlingAllowed)
       {
         // Castling
         if (move & moveModifiers::CASTLE_KING)
         {
-          const uint64_t castle = castlingRookStartPos<whiteTurn, true>() |
-                                  castlingRookEndPos<whiteTurn, true>();
+          const uint64_t castle = castlingRookStartPos<whiteTurn, true>() | castlingRookEndPos<whiteTurn, true>();
           bs.pieceBoards[6] ^= castle;
           bs.teamBoards[2] ^= castle;
+          bs.hash ^= m_zobristHash->pieceHashTable[6][63];
+          bs.hash ^= m_zobristHash->pieceHashTable[6][61];
         }
         else if (move & moveModifiers::CASTLE_QUEEN)
         {
-          const uint64_t castle = castlingRookStartPos<whiteTurn, false>() |
-                                  castlingRookEndPos<whiteTurn, false>();
+          const uint64_t castle = castlingRookStartPos<whiteTurn, false>() | castlingRookEndPos<whiteTurn, false>();
           bs.pieceBoards[6] ^= castle;
           bs.teamBoards[2] ^= castle;
+          bs.hash ^= m_zobristHash->pieceHashTable[6][56];
+          bs.hash ^= m_zobristHash->pieceHashTable[6][59];
         }
         bs.castlingRights &= ~0b1100;
       }
@@ -523,29 +546,42 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
   {
     if constexpr (whiteTurn)
     {
+      bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 13][startSquare];
       bs.pieceBoards[attackerSquare - 13] ^= startBitboard | endBitboard;
+      bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 13][endSquare];
     }
     else
     {
+      bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 8][startSquare];
       bs.pieceBoards[attackerSquare - 8] ^= startBitboard | endBitboard;
+      bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 8][endSquare];
     }
-
+    // Merge with if case the above
     if (move & moveModifiers::PROMO)
     {
       // Undoing the assumed new position
       if constexpr (whiteTurn)
       {
+        bs.pieceCount[4]--;
+
         bs.pieceBoards[attackerSquare - 13] ^= endBitboard;
+        bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 13][endSquare];
         unsigned long promo;
         _BitScanForward64(&promo, move & moveModifiers::PROMO);
         bs.pieceBoards[promo - 24] ^= endBitboard;
+        bs.pieceCount[promo - 24]++;
+        bs.hash ^= m_zobristHash->pieceHashTable[promo - 24][endSquare];
       }
       else
       {
+        bs.pieceCount[9]--;
         bs.pieceBoards[attackerSquare - 8] ^= endBitboard;
+        bs.hash ^= m_zobristHash->pieceHashTable[attackerSquare - 8][endSquare];
         unsigned long promo;
         _BitScanForward64(&promo, move & moveModifiers::PROMO);
         bs.pieceBoards[promo - 19] ^= endBitboard;
+        bs.pieceCount[promo - 19]++;
+        bs.hash ^= m_zobristHash->pieceHashTable[promo - 19][endSquare];
       }
     }
 
@@ -556,12 +592,14 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
         const uint64_t epCapBoard = endBitboard >> 8;
         bs.pieceBoards[9] ^= epCapBoard;
         bs.teamBoards[2] ^= epCapBoard;
+        bs.hash ^= m_zobristHash->pieceHashTable[9][endSquare - 8];
       }
       else
       {
         const uint64_t epCapBoard = endBitboard << 8;
         bs.pieceBoards[4] ^= epCapBoard;
         bs.teamBoards[1] ^= epCapBoard;
+        bs.hash ^= m_zobristHash->pieceHashTable[4][endSquare + 8];
       }
     }
     if constexpr (castlingAllowed)
@@ -595,6 +633,8 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
       {
         if (endBitboard & bs.pieceBoards[i])
         {
+          bs.hash ^= m_zobristHash->pieceHashTable[i][endSquare];
+          bs.pieceCount[i]--;
           bs.pieceBoards[i] ^= endBitboard;
           bs.teamBoards[2] ^= endBitboard;
 
@@ -621,6 +661,8 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
       {
         if (endBitboard & bs.pieceBoards[i])
         {
+          bs.hash ^= m_zobristHash->pieceHashTable[i][endSquare];
+          bs.pieceCount[i]--;
           bs.pieceBoards[i] ^= endBitboard;
           bs.teamBoards[1] ^= endBitboard;
 
@@ -643,12 +685,10 @@ const void MoveGeneration::movePiece(BoardState& bs, uint32_t move)
     }
   }
 
-  // Should not be here
-  if (bs.teamBoards[1] == bs.teamBoards[2])
-    throw std::invalid_argument("bs.teamBoards[1] == bs.teamBoards[2]");
-
   // Update Board
   bs.teamBoards[0] = bs.teamBoards[1] + bs.teamBoards[2];
+  // Update Castle hash
+  bs.hash ^= m_zobristHash->castleHash[bs.castlingRights & 0b1111];
 }
 
 template<bool whiteTurn>

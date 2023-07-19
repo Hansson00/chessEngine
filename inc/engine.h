@@ -5,6 +5,7 @@
 #include "../inc/moveGeneration.h"
 #include "../inc/hash_table7.hpp"
 #include "../inc/zobristHash.h"
+#include "../inc/evaluate.h"
 
 #include <stdint.h>
 #include <memory>
@@ -28,8 +29,13 @@ private:
   static std::string getInput();
 
   // Gameplay
+  void startSearch(std::string str);
   void movePiece(std::string str);
   void undoMove();
+
+  // Search
+  void rootNegaMax(uint8_t depth, const piece::BoardState& bs);
+  int negaMax(uint8_t depth, const piece::BoardState& bs);
 
   // Perft
   void perftCommand(std::string str);
@@ -37,6 +43,7 @@ private:
   uint32_t search(uint8_t depth, const piece::BoardState& bs, uint16_t& hashHits);
 
   // Tools
+  void sortMoves();
   void moveParserToFile(uint32_t move, std::ofstream& myFile);
   void movesParser();
   void moveParser(uint32_t move);
@@ -48,17 +55,16 @@ private:
   void findKey();
 
   // Members
-  // TODO: Add std::pair!! hmm
-  // emhash7::HashMap<uint64_t, uint64_t> moveHash;
-  std::unordered_map<uint64_t, uint64_t> moveHash;
+  emhash7::HashMap<uint64_t, uint64_t> moveHash;
+  // std::unordered_map<uint64_t, uint64_t> moveHash;
+
+  // <Move, score>
+  std::vector<std::pair<int, int>> m_moveVector;
 
   zobristHash::ZobristHash* m_zobristHash;
   piece::MoveGeneration* m_moveGenerator;
+  Evaluate* m_evaluate;
   piece::BoardState m_bs;
   piece::MoveList m_ml;
   std::stack<piece::BoardState> m_prevStates;
-
-  bool addBoardStates = false;
-  uint64_t firstMiss = 0;
-  std::vector<piece::BoardState*> boardStates;
 };

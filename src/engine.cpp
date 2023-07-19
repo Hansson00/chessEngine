@@ -1,19 +1,23 @@
 #include "../inc/engine.h"
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <corecrt_math.h>
 #include <intrin.h>
 #include <iostream>
 #include <utility>
+#include <vector>
 #include <stdint.h>
 
-#define PARSE_TO_FILE
+// #define PARSE_TO_FILE
 
 Engine::Engine()
 {
-  m_zobristHash = new zobristHash::ZobristHash();
   GUI::m_setup();
-  m_moveGenerator = new piece::MoveGeneration();
+  m_zobristHash = new zobristHash::ZobristHash();
+  m_moveGenerator = new piece::MoveGeneration(m_zobristHash);
+  m_evaluate = new Evaluate();
   resetState();
 
   std::cout << "Welcome to engine version 0.1. Use -h for help." << std::endl;
@@ -23,6 +27,7 @@ Engine::~Engine()
 {
   delete (m_moveGenerator);
   delete (m_zobristHash);
+  delete (m_evaluate);
 }
 
 void Engine::run()
@@ -48,15 +53,23 @@ void Engine::engineInterface()
   {
     perftCommand(str);
   }
+  else if (strcmp(token.c_str(), "search") == 0)
+  {
+    startSearch(str);
+  }
   else if (strcmp(token.c_str(), "move") == 0)
   {
     movePiece(str);
     GUI::printFenString(m_bs);
+    std::cout << "\nCorrect hash: " << m_zobristHash->zobristHash(m_bs) << std::endl;
+    std::cout << "My hash     : " << m_bs.hash << std::endl;
   }
   else if (strcmp(str.c_str(), "board") == 0)
   {
     GUI::printToConsole(m_bs);
     GUI::printFenString(m_bs);
+    std::cout << "\nCorrect hash: " << m_zobristHash->zobristHash(m_bs) << std::endl;
+    std::cout << "My hash     : " << m_bs.hash << std::endl;
   }
   else if (strcmp(str.c_str(), "board_mask") == 0)
   {
@@ -147,6 +160,43 @@ std::string Engine::getInput()
 // Gameplay
 ////////////////////////////////////////////////////////////////
 
+void Engine::startSearch(std::string str)
+{
+  if (str.length() < 7)
+  {
+    std::cout << "Non-valid integer used" << std::endl;
+    return;
+  }
+  std::string token = str.substr(7, str.length());
+  for (const char& sub_str : token)
+  {
+    if (sub_str < '0' || sub_str > '9')
+    {
+      std::cout << "Non-valid integer used" << std::endl;
+      return;
+    }
+  }
+  uint8_t times = std::stoi(token);
+  rootNegaMax(times, m_bs);
+
+  auto sortFunc = [](const std::pair<int, int>& p1, const std::pair<int, int>& p2) -> bool { return p1.second < p2.second; };
+
+  std::make_heap(m_moveVector.begin(), m_moveVector.end(), sortFunc);
+  std::pop_heap(m_moveVector.begin(), m_moveVector.end(), sortFunc);
+  std::cout << "Best moves:\n";
+  std::cout << "1: ";
+  moveParser(m_moveVector.back().first);
+  std::cout << ", " << m_moveVector.back().second << std::endl;
+  std::cout << "2: ";
+  std::pop_heap(m_moveVector.begin(), m_moveVector.end(), sortFunc);
+  moveParser(m_moveVector.back().first);
+  std::cout << ", " << m_moveVector.back().second << std::endl;
+  std::cout << "3: ";
+  moveParser(m_moveVector.back().first);
+  std::pop_heap(m_moveVector.begin(), m_moveVector.end(), sortFunc);
+  std::cout << ", " << m_moveVector.back().second << std::endl;
+}
+
 void Engine::movePiece(std::string str)
 {
   const std::string delimiter = " ";
@@ -226,6 +276,58 @@ void Engine::undoMove()
 }
 
 ////////////////////////////////////////////////////////////////
+// Search for moves
+////////////////////////////////////////////////////////////////
+
+void Engine::rootNegaMax(uint8_t depth, const piece::BoardState& bs)
+{
+  m_moveVector.clear();
+  piece::BoardState current = bs;
+  piece::MoveList ml;
+  m_moveGenerator->generatePossibleMoves(current, ml);
+
+  for (uint32_t i = 0; i < ml.end && i < 100; i++)
+  {
+    m_moveGenerator->makeMove(current, ml.move[i]);
+    m_moveVector.emplace_back(std::make_pair(ml.move[i], -negaMax(depth - 1, current)));
+    current = bs;
+  }
+}
+
+int Engine::negaMax(uint8_t depth, const piece::BoardState& bs)
+{
+  if (depth == 0)
+    return m_evaluate->evaluate(bs) * ((bs.whiteTurn * 2) - 1);
+
+  int max = (-2147483647i32);
+
+  if ((depth > 1) && (moveHash.find(bs.hash) != moveHash.end()))
+  {
+    return moveHash.at(bs.hash);
+  }
+  piece::BoardState current = bs;
+  piece::MoveList ml;
+  m_moveGenerator->generatePossibleMoves(current, ml);
+
+  for (uint32_t i = 0; i < ml.end && i < 100; i++)
+  {
+    m_moveGenerator->makeMove(current, ml.move[i]);
+    int score = -negaMax(depth - 1, current);
+    if (score > max)
+    {
+      max = score;
+    }
+    current = bs;
+  }
+
+  if (depth > 1)
+  {
+    moveHash[bs.hash] = max;
+  }
+  return max;
+}
+
+////////////////////////////////////////////////////////////////
 // Perft commands
 ////////////////////////////////////////////////////////////////
 
@@ -248,13 +350,20 @@ void Engine::perftCommand(std::string str)
     }
   }
   uint8_t times = std::stoi(token);
-  if (times > 7)
+  if (times > 8)
   {
     std::cout << "Maximum perft value supported is currently 7" << std::endl;
     return;
   }
+  auto start = std::chrono::system_clock::now();
+  uint64_t perftCount = perft(times, m_bs);
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed_time = end - start;
 
-  perft(times, m_bs);
+  std::cout << "Time: " << elapsed_time.count() << "s" << std::endl;
+  std::cout << "KN/s: "
+            << static_cast<double>(perftCount) / elapsed_time.count() / 1000
+            << std::endl;
 }
 
 uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
@@ -291,7 +400,6 @@ uint64_t Engine::perft(uint8_t depth, const piece::BoardState& bs)
   std::cout << "Hash hits: " << hashHits << std::endl;
   moveHash.clear();
 
-  addBoardStates = true;
   return numPositions;
 }
 
@@ -300,14 +408,12 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs, uint16_t& ha
   if (depth == 0)
     return 1;
 
-  uint64_t hash;
   if (depth > 1)
   {
-    hash = m_zobristHash->zobristHash(bs);
-    if (moveHash.find(hash) != moveHash.end())
+    if (moveHash.find(bs.hash) != moveHash.end())
     {
       hashHits++;
-      return moveHash.at(hash);
+      return moveHash.at(bs.hash);
     }
   }
 
@@ -317,6 +423,7 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs, uint16_t& ha
   piece::MoveList ml;
   m_moveGenerator->generatePossibleMoves(current, ml);
 
+  // retruns the amount of moves of the next level
   if (depth == 1)
     return ml.end;
 
@@ -330,34 +437,7 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs, uint16_t& ha
 
   if (depth > 1)
   {
-    // hash = m_zobristHash->zobristHash(bs);
-    // if (addBoardStates)
-    //{
-    //   if (hash == firstMiss)
-    //   {
-    //     hashHits++;
-    //     piece::BoardState* newBs = new piece::BoardState();
-    //     *newBs = bs;
-    //     boardStates.emplace_back(newBs);
-    //   }
-    // }
-    // else
-    //{
-    //   if (moveHash.find(hash) != moveHash.end())
-    //   {
-    //     if (moveHash.at(hash) != numPositions)
-    //     {
-    //       hashHits++;
-    //       std::cout << "Invalid hash: " << hash << std::endl;
-    //       if (firstMiss == 0)
-    //       {
-    //         firstMiss = hash;
-    //       }
-    //     }
-    //   }
-    // }
-
-    moveHash[hash] = numPositions;
+    moveHash[bs.hash] = numPositions;
   }
 
   return numPositions;
@@ -366,6 +446,7 @@ uint32_t Engine::search(uint8_t depth, const piece::BoardState& bs, uint16_t& ha
 ////////////////////////////////////////////////////////////////
 // Tools
 ////////////////////////////////////////////////////////////////
+
 void Engine::moveParserToFile(uint32_t move, std::ofstream& myFile)
 {
   char row_from = (move & piece::moveModifiers::FROM) & 7;
@@ -568,7 +649,7 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
           bs.castlingRights |= 0b1;
         else
         {
-          // bs->pieceBoards[0] |= space;
+          // bs->§[0] |= space;
           unsigned long king;
           _BitScanForward64(&king, space);
           bs.kings[0] = king;
@@ -582,25 +663,25 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::q] |= space;
-          // bs.pieceCount[pieces::q]++;
+          bs.pieceCount[pieces::q]++;
         }
 
         break;
       case ('R'):
         bs.pieceBoards[pieces::r] |= space;
-        // bs.pieceCount[pieces::r]++;
+        bs.pieceCount[pieces::r]++;
         break;
       case ('B'):
         bs.pieceBoards[pieces::b] |= space;
-        // bs.pieceCount[pieces::b]++;
+        bs.pieceCount[pieces::b]++;
         break;
       case ('N'):
         bs.pieceBoards[pieces::n] |= space;
-        // bs.pieceCount[pieces::n]++;
+        bs.pieceCount[pieces::n]++;
         break;
       case ('P'):
         bs.pieceBoards[pieces::p] |= space;
-        // bs.pieceCount[pieces::p]++;
+        bs.pieceCount[pieces::p]++;
         break;
       case ('k'):
         if (done)
@@ -621,12 +702,12 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::q + 5] |= space;
-          // bs.pieceCount[pieces::q + 5]++;
+          bs.pieceCount[pieces::q + 5]++;
         }
         break;
       case ('r'):
         bs.pieceBoards[pieces::r + 5] |= space;
-        // bs.pieceCount[pieces::r + 5]++;
+        bs.pieceCount[pieces::r + 5]++;
         break;
       case ('b'):
         if (done)
@@ -634,16 +715,16 @@ void Engine::initFenstring(piece::BoardState& bs, const char* str)
         else
         {
           bs.pieceBoards[pieces::b + 5] |= space;
-          // bs.pieceCount[pieces::b + 5]++;
+          bs.pieceCount[pieces::b + 5]++;
         }
         break;
       case ('n'):
         bs.pieceBoards[pieces::n + 5] |= space;
-        // bs.pieceCount[pieces::n + 5]++;
+        bs.pieceCount[pieces::n + 5]++;
         break;
       case ('p'):
         bs.pieceBoards[pieces::p + 5] |= space;
-        // bs.pieceCount[pieces::p + 5]++;
+        bs.pieceCount[pieces::p + 5]++;
         break;
       case ('w'):
         bs.whiteTurn = 1;

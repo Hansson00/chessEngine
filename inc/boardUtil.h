@@ -91,7 +91,7 @@ struct BoardState
   // 5-9 black Queen, black Rook, black Bishop, black Knight, black Pawn
   uint64_t pieceBoards[10] = {};
   uint64_t teamBoards[3] = {};
-  // uint8_t pieceCount[10] = {};
+  uint8_t pieceCount[10] = {};
   // Mask for pieces that are pinned to the king
   uint64_t pinnedSquares = 0;
 

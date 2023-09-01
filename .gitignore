@@ -2,9 +2,9 @@
 .clang-format
 .vscode/
 .vs/
-ConsoleChess.sln
-ConsoleChess.vcxproj
-ConsoleChess.vcxproj.filters
-ConsoleChess.vcxproj.user
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
 Debug/
 x64/

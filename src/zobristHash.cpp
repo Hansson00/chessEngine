@@ -32,7 +32,8 @@ void ZobristHash::initHashtable(int seed)
 }
 uint64_t ZobristHash::zobristHash(const piece::BoardState& bs)
 {
-  uint64_t hash = bs.turns * moveHash;
+  uint64_t hash = 0; // = bs.turns * moveHash; 
+
   if (bs.whiteTurn)
     hash ^= whiteTurn;
   unsigned long position;

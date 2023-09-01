@@ -111,9 +111,9 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
     bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
 
-    bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
-    bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<false>(bs);
     generatePinsBlocks<false>(bs);
 
@@ -143,9 +143,9 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
 
     bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
-    bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
-    bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<true>(bs);
     generatePinsBlocks<true>(bs);
 

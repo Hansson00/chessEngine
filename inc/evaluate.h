@@ -6,7 +6,7 @@ class Evaluate
 public:
   Evaluate() = default;
   ~Evaluate() = default;
-  const int evaluate(const piece::BoardState& bs);
+  const float evaluate(const piece::BoardState& bs);
 
 private:
   // Q, R, B, Kn, pawn

@@ -16,29 +16,38 @@ int evaluateMap(uint64_t bitBoard, const char* evaluationHeatMap)
   return evaluation;
 }
 
-const int Evaluate::evaluate(const piece::BoardState& bs)
+const float Evaluate::evaluate(const piece::BoardState& bs)
 {
-  int eval = 0;
-
-  // Piece value
-  for (uint8_t i = 0; i < 5; i++)
-  {
-    eval += bs.pieceCount[i] * pieceValue[i];
-    eval -= bs.pieceCount[i + 5] * pieceValue[i];
-  }
+  float eval = 0;
 
   // king
-  eval += b_kingHeatmap[bs.kings[0]];
-  eval -= w_kingHeatmap[bs.kings[1]];
+
+  if (bs.turns < 50)
+  {
+    eval += b_kingHeatmap[bs.kings[0]];
+    eval -= w_kingHeatmap[bs.kings[1]];
+  }
+  else
+  {
+    eval += kingLateGame[bs.kings[0]];
+    eval -= kingLateGame[bs.kings[1]];
+  }
 
   // Queen
   // eval += evaluateMap(bs.pieceBoards[0], w_kingHeatmap);
   // eval += evaluateMap(bs.pieceBoards[5], b_kingHeatmap);
 
   // Rook
-  eval += evaluateMap(bs.pieceBoards[1], b_rookHeatmap);
-  eval -= evaluateMap(bs.pieceBoards[6], w_rookHeatmap);
-
+  if (bs.turns < 50)
+  {
+    eval += evaluateMap(bs.pieceBoards[1], b_rookHeatmap);
+    eval -= evaluateMap(bs.pieceBoards[6], w_rookHeatmap);
+  }
+  else
+  {
+    eval += evaluateMap(bs.pieceBoards[1], rookLateGame);
+    eval -= evaluateMap(bs.pieceBoards[6], rookLateGame);
+  }
   // Bishop
   // eval += evaluateMap(bs.pieceBoards[2], w_rookHeatmap);
   // eval += evaluateMap(bs.pieceBoards[7], b_rookHeatmap);
@@ -50,6 +59,15 @@ const int Evaluate::evaluate(const piece::BoardState& bs)
   // Pawn
   eval += evaluateMap(bs.pieceBoards[4], b_pawnHeatmap);
   eval -= evaluateMap(bs.pieceBoards[9], w_pawnHeatmap);
+
+  eval *= 0.2f;
+
+  // Piece value
+  for (uint8_t i = 0; i < 5; i++)
+  {
+      eval += bs.pieceCount[i] * pieceValue[i];
+      eval -= bs.pieceCount[i + 5] * pieceValue[i];
+  }
 
   return eval;
 }

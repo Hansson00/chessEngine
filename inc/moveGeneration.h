@@ -44,8 +44,8 @@ private:
   void initKingDivide();
 
   // Attack functions
-  template<piece::pieceType P>
-  const inline uint64_t generatePieceAttacks(uint64_t board, uint32_t piece);
+  template<piece::t_piece piece>
+  const inline uint64_t generatePieceAttacks(uint64_t board, uint32_t position);
 
   const inline uint64_t getBishopAttacks(uint8_t square, uint64_t occupancy);
   const inline uint64_t getRookAttacks(uint8_t square, uint64_t occupancy);
@@ -54,7 +54,7 @@ private:
   template<bool whiteTurn>
   const void generateKingMoves(const BoardState& bs, MoveList& ml);
 
-  template<bool whiteTurn, piece::pieceType p>
+  template<bool whiteTurn, piece::t_piece pieceType>
   const void generatePieceMoves(const piece::BoardState& bs,
                                 piece::MoveList& ml);
 
@@ -82,8 +82,8 @@ private:
 
   // Helper functions
 
-  template<piece::pieceType p>
-  static void generateMultipleMoves(uint64_t board, uint64_t moves, uint32_t position, MoveList& ml);
+  template<bool whiteTurn>
+  static void generateMultipleMoves(uint64_t board, uint64_t moves, uint32_t position, MoveList& ml, piece::t_piece piece);
 
   static inline uint32_t isCapture(uint64_t board, unsigned long dest);
 

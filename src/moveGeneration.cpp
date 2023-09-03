@@ -1,7 +1,10 @@
 
 #include "../inc/moveGeneration.h"
 #include "../inc/gui.h"
+#include "../inc/makeMove.h"
 #include <intrin.h>
+#include <stdint.h>
+#include <memory>
 
 namespace piece
 {
@@ -111,9 +114,9 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
     bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
 
-    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    // bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
-    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    // bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<false>(bs);
     generatePinsBlocks<false>(bs);
 
@@ -143,9 +146,9 @@ void MoveGeneration::makeMove(BoardState& bs, const uint32_t move)
 
     bs.hash ^= m_zobristHash->whiteTurn;
     bs.whiteTurn ^= 1;
-    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    // bs.hash ^= m_zobristHash->moveHash * bs.turns;
     bs.turns++;
-    //bs.hash ^= m_zobristHash->moveHash * bs.turns;
+    // bs.hash ^= m_zobristHash->moveHash * bs.turns;
     generateAttacks<true>(bs);
     generatePinsBlocks<true>(bs);
 
@@ -242,22 +245,22 @@ void MoveGeneration::initKingDivide()
 // Attacks
 ////////////////////////////////////////////////////////////////
 
-template<piece::pieceType p>
+template<piece::t_piece piece>
 const inline uint64_t MoveGeneration::generatePieceAttacks(uint64_t board, uint32_t position)
 {
-  if constexpr (p == piece::pieceType::Queen)
+  if constexpr (piece == piece::t_piece::t_Queen)
   {
     return getBishopAttacks(position, board) | getRookAttacks(position, board);
   }
-  if constexpr (p == piece::pieceType::Rook)
+  if constexpr (piece == piece::t_piece::t_Rook)
   {
     return getRookAttacks(position, board);
   }
-  if constexpr (p == piece::pieceType::Bishop)
+  if constexpr (piece == piece::t_piece::t_Bishop)
   {
     return getBishopAttacks(position, board);
   }
-  if constexpr (p == piece::pieceType::Knight)
+  if constexpr (piece == piece::t_piece::t_Knight)
   {
     return m_knightAttacks[position];
   }
@@ -314,17 +317,20 @@ const void MoveGeneration::generateKingMoves(const BoardState& bs,
 
   if (bs.castlingRights & CASTELING_K_CHECK)
   {
-    constexpr uint16_t castleMoveK =
-        static_cast<uint16_t>((62 - 56 * whiteTurn) << 6);
-    ml.add(k_pos | castleMoveK | moveModifiers::king |
-           moveModifiers::CASTLE_KING);
+    constexpr uint16_t castleMoveK = 62 - (56 * whiteTurn);
+
+    ml.add(std::make_unique<moveCB>([k_pos, castleMoveK](BoardState& bs) {
+      makeKingMove<whiteTurn, true, false>(bs, k_pos, castleMoveK, true);
+      return k_pos | (castleMoveK << 6);
+    }));
   }
   if (bs.castlingRights & CASTELING_Q_CHECK)
   {
-    constexpr uint16_t castleMoveQ =
-        static_cast<uint16_t>((58 - 56 * whiteTurn) << 6);
-    ml.add(k_pos | castleMoveQ | moveModifiers::king |
-           moveModifiers::CASTLE_QUEEN);
+    constexpr uint16_t castleMoveQ = 58 - 56 * whiteTurn;
+    ml.add(std::make_unique<moveCB>([k_pos, castleMoveQ](BoardState& bs) {
+      makeKingMove<whiteTurn, true, false>(bs, k_pos, castleMoveQ, true);
+      return k_pos | (castleMoveQ << 6);
+    }));
   }
 
   // Regular moves
@@ -333,12 +339,16 @@ const void MoveGeneration::generateKingMoves(const BoardState& bs,
   while (moves)
   {
     _BitScanForward64(&dest, moves);
-    ml.add(k_pos | dest << 6 | moveModifiers::king | isCapture(board, dest));
+    /// TODO: Make king cap
+    ml.add(std::make_unique<moveCB>([k_pos, dest](BoardState& bs) {
+      makeKingMove<whiteTurn, false, true>(bs, k_pos, dest, true);
+      return k_pos | (dest << 6);
+    }));
     moves &= moves - 1;
   }
 }
 
-template<bool whiteTurn, piece::pieceType p>
+template<bool whiteTurn, piece::t_piece pieceType>
 const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
                                               piece::MoveList& ml)
 {
@@ -348,7 +358,7 @@ const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
   const uint64_t nonTeam = ~team;
 
   // 5 = pieces offset
-  constexpr uint8_t pieceIndex = static_cast<uint8_t>(p) + !whiteTurn * 5;
+  constexpr uint8_t pieceIndex = (uint8_t)pieceType + !whiteTurn * 5;
   uint64_t movingPieces = bs.pieceBoards[pieceIndex];
 
   unsigned long piece;
@@ -361,32 +371,32 @@ const void MoveGeneration::generatePieceMoves(const piece::BoardState& bs,
     uint64_t pinnedPiece = (1ULL << piece);
     if (pinnedPiece & bs.pinnedSquares)
     {
-      if constexpr (p == piece::pieceType::Queen)
+      if constexpr (pieceType == piece::t_piece::t_Queen)
       {
-        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves = generatePieceAttacks<pieceType>(board, piece) & nonTeam & bs.pinnedSquares;
         moves &= pinnedStraight(bs.kings[!whiteTurn], piece) | pinnedDiagonal(bs.kings[!whiteTurn], piece);
       }
-      if constexpr (p == piece::pieceType::Rook)
+      if constexpr (pieceType == piece::t_piece::t_Rook)
       {
-        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves = generatePieceAttacks<pieceType>(board, piece) & nonTeam & bs.pinnedSquares;
         moves &= pinnedStraight(bs.kings[!whiteTurn], piece);
       }
-      if constexpr (p == piece::pieceType::Bishop)
+      if constexpr (pieceType == piece::t_piece::t_Bishop)
       {
-        moves = generatePieceAttacks<p>(board, piece) & nonTeam & bs.pinnedSquares;
+        moves = generatePieceAttacks<pieceType>(board, piece) & nonTeam & bs.pinnedSquares;
         moves &= pinnedDiagonal(bs.kings[!whiteTurn], piece);
       }
-      if constexpr (p == piece::pieceType::Knight)
+      if constexpr (pieceType == piece::t_piece::t_Knight)
       {
         continue;
       }
     }
     else
     {
-      moves = generatePieceAttacks<p>(board, piece) & nonTeam;
+      moves = generatePieceAttacks<pieceType>(board, piece) & nonTeam;
     }
     moves &= bs.blockMask;
-    generateMultipleMoves<p>(board, moves, piece, ml);
+    generateMultipleMoves<whiteTurn>(board, moves, piece, ml, pieceType);
   }
 }
 
@@ -703,7 +713,7 @@ const void MoveGeneration::generateAttacks(BoardState& bs)
   while (attack_piece)
   {
     _BitScanForward64(&attacker, attack_piece);
-    attacks |= generatePieceAttacks<pieceType::Queen>(board, attacker);
+    attacks |= generatePieceAttacks<piece::t_piece::t_Queen>(board, attacker);
 
     attack_piece &= attack_piece - 1;
   }
@@ -714,7 +724,7 @@ const void MoveGeneration::generateAttacks(BoardState& bs)
   while (attack_piece)
   {
     _BitScanForward64(&attacker, attack_piece);
-    attacks |= generatePieceAttacks<pieceType::Rook>(board, attacker);
+    attacks |= generatePieceAttacks<piece::t_piece::t_Rook>(board, attacker);
     attack_piece &= attack_piece - 1;
   }
   //
@@ -724,7 +734,7 @@ const void MoveGeneration::generateAttacks(BoardState& bs)
   while (attack_piece)
   {
     _BitScanForward64(&attacker, attack_piece);
-    attacks |= generatePieceAttacks<pieceType::Bishop>(board, attacker);
+    attacks |= generatePieceAttacks<piece::t_piece::t_Bishop>(board, attacker);
     attack_piece &= attack_piece - 1;
   }
 
@@ -735,7 +745,7 @@ const void MoveGeneration::generateAttacks(BoardState& bs)
   while (attack_piece)
   {
     _BitScanForward64(&attacker, attack_piece);
-    attacks |= generatePieceAttacks<pieceType::Knight>(board, attacker);
+    attacks |= generatePieceAttacks<piece::t_piece::t_Knight>(board, attacker);
     attack_piece &= attack_piece - 1;
   }
 
@@ -791,7 +801,7 @@ const void MoveGeneration::generatePinsBlocks(BoardState& bs)
   }
   unsigned long threat;
 
-  // TODO: Create a function!
+  /// TODO: Create a function!
   while (diagonal_threats)
   {
     _BitScanForward64(&threat, diagonal_threats);
@@ -925,7 +935,9 @@ const void MoveGeneration::generateCastlingOptions(BoardState& bs)
 template<bool whiteTurn>
 const void MoveGeneration::enPassantHelper(const BoardState& bs, MoveList& ml, uint64_t& epPosBitboard)
 {
-  uint64_t epPosAttacks = singlePawnAttack(bs.enPassant, whiteTurn) & bs.pieceBoards[9 - whiteTurn * 5];
+  const uint8_t ep = bs.enPassant;
+
+  uint64_t epPosAttacks = singlePawnAttack(ep, whiteTurn) & bs.pieceBoards[9 - whiteTurn * 5];
   // Get king row and check if it is not 5 or 4 (white, black)
   const bool kingNotInDanger = !((bs.kings[!whiteTurn] >> 3) == (whiteTurn ? 4 : 3));
   unsigned long dest;
@@ -938,7 +950,10 @@ const void MoveGeneration::enPassantHelper(const BoardState& bs, MoveList& ml, u
 
     if (kingSpecialEP && (notPinnedStartSquare || ifPinnedAndInLineWithKing))
     {
-      ml.add(dest | ((uint16_t)bs.enPassant) << 6 | moveModifiers::pawn | moveModifiers::EN_PESSANT_CAP);
+      ml.add(std::make_unique<moveCB>([dest, ep](BoardState& bs) {
+        makePieceMove<true, true>(bs, piece::t_piece::t_Pawn, dest, ep);
+        return dest | (ep << 6);
+      }));
     }
     epPosAttacks &= epPosAttacks - 1;
   }
@@ -960,12 +975,22 @@ const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, u
     {
       if (!(startBitboard & bs.pinnedSquares) || ((startBitboard & bs.pinnedSquares) && (promoPushBitboard & bs.pinnedSquares)))
       {
-        promoPush <<= 6;
-        const uint32_t combo = dest | promoPush | moveModifiers::pawn;
-        ml.add(combo | moveModifiers::PROMO_QUEEN);
-        ml.add(combo | moveModifiers::PROMO_ROOK);
-        ml.add(combo | moveModifiers::PROMO_BISHOP);
-        ml.add(combo | moveModifiers::PROMO_KNIGHT);
+        ml.add(std::make_unique<moveCB>([dest, promoPush](BoardState& bs) {
+          makePromoMove<true, false>(bs, piece::t_piece::t_Queen, dest, promoPush);
+          return dest | (promoPush << 6) | moveModifiers::PROMO_QUEEN;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, promoPush](BoardState& bs) {
+          makePromoMove<true, false>(bs, piece::t_piece::t_Rook, dest, promoPush);
+          return dest | (promoPush << 6) | moveModifiers::PROMO_ROOK;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, promoPush](BoardState& bs) {
+          makePromoMove<true, false>(bs, piece::t_piece::t_Bishop, dest, promoPush);
+          return dest | (promoPush << 6) | moveModifiers::PROMO_BISHOP;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, promoPush](BoardState& bs) {
+          makePromoMove<true, false>(bs, piece::t_piece::t_Knight, dest, promoPush);
+          return dest | (promoPush << 6) | moveModifiers::PROMO_KNIGHT;
+        }));
       }
     }
 
@@ -980,13 +1005,22 @@ const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, u
           ((startBitboard & bs.pinnedSquares) &&
            (attackSquareBitboard & bs.pinnedSquares)))
       {
-        attackSquare <<= 6;
-        const uint32_t combo =
-            dest | attackSquare | moveModifiers::pawn | moveModifiers::CAPTURE;
-        ml.add(combo | moveModifiers::PROMO_QUEEN);
-        ml.add(combo | moveModifiers::PROMO_ROOK);
-        ml.add(combo | moveModifiers::PROMO_BISHOP);
-        ml.add(combo | moveModifiers::PROMO_KNIGHT);
+        ml.add(std::make_unique<moveCB>([dest, attackSquare](BoardState& bs) {
+          makePromoMove<true, true>(bs, piece::t_piece::t_Queen, dest, attackSquare);
+          return dest | (attackSquare << 6) | moveModifiers::PROMO_QUEEN;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, attackSquare](BoardState& bs) {
+          makePromoMove<true, true>(bs, piece::t_piece::t_Rook, dest, attackSquare);
+          return dest | (attackSquare << 6) | moveModifiers::PROMO_ROOK;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, attackSquare](BoardState& bs) {
+          makePromoMove<true, true>(bs, piece::t_piece::t_Bishop, dest, attackSquare);
+          return dest | (attackSquare << 6) | moveModifiers::PROMO_BISHOP;
+        }));
+        ml.add(std::make_unique<moveCB>([dest, attackSquare](BoardState& bs) {
+          makePromoMove<true, true>(bs, piece::t_piece::t_Knight, dest, attackSquare);
+          return dest | (attackSquare << 6) | moveModifiers::PROMO_KNIGHT;
+        }));
       }
       promoAttacks &= promoAttacks - 1;
     }
@@ -998,35 +1032,31 @@ const void MoveGeneration::promotionHelper(const BoardState& bs, MoveList& ml, u
 // Helper functions
 ////////////////////////////////////////////////////////////////
 
-template<piece::pieceType p>
+template<bool whiteTurn>
 void MoveGeneration::generateMultipleMoves(uint64_t board,
                                            uint64_t moves,
                                            uint32_t position,
-                                           MoveList& ml)
+                                           MoveList& ml,
+                                           piece::t_piece piece)
 {
-  uint32_t type;
-  if constexpr (p == piece::pieceType::Queen)
-  {
-    type = static_cast<uint32_t>(moveModifiers::queen);
-  }
-  if constexpr (p == piece::pieceType::Rook)
-  {
-    type = static_cast<uint32_t>(moveModifiers::rook);
-  }
-  if constexpr (p == piece::pieceType::Bishop)
-  {
-    type = static_cast<uint32_t>(moveModifiers::bishop);
-  }
-  if constexpr (p == piece::pieceType::Knight)
-  {
-    type = static_cast<uint32_t>(moveModifiers::knight);
-  }
-
   unsigned long dest;
   while (moves)
   {
     _BitScanForward64(&dest, moves);
-    ml.add(position | (dest << 6) | type | isCapture(board, dest));
+    if (isCapture(board, dest))
+    {
+      ml.add(std::make_unique<moveCB>([position, dest, piece](BoardState& bs) {
+        makePieceMove<whiteTurn, true>(bs, piece, position, dest);
+        return dest | (dest << 6);
+      }));
+    }
+    else
+    {
+      ml.add(std::make_unique<moveCB>([position, dest, piece](BoardState& bs) {
+        makePieceMove<whiteTurn, false>(bs, piece, position, dest);
+        return dest | (dest << 6);
+      }));
+    }
     moves &= moves - 1;
   }
 }

@@ -2,8 +2,11 @@
 #pragma once
 #include <intrin.h>
 #include <stdint.h>
+#include <algorithm>
 #include <cinttypes>
 #include <iostream>
+#include <functional>
+#include <memory>
 
 namespace piece
 {
@@ -21,9 +24,14 @@ constexpr uint64_t CASTELING_Q_CHECK = 1 << 5;
 
 const static char piece[12] = {'Q', 'R', 'B', 'N', 'P', 'q', 'r', 'b', 'n', 'p'};
 
-enum class MoveListType
+enum class t_piece : uint8_t
 {
-  CAPTURE = 4194304
+  t_Queen = 0,
+  t_Rook = 1,
+  t_Bishop = 2,
+  t_Knight = 3,
+  t_Pawn = 4,
+  t_King = 5
 };
 
 enum moveModifiers
@@ -106,43 +114,18 @@ struct BoardState
   uint8_t turns = 0;
   bool whiteTurn = 1;
   uint64_t hash;
-  /*
-    friend bool operator==(BoardState& l, BoardState& r)
-    {
-      int eq = 0;
-      for (int i = 0; i < 10; i++)
-      {
-        eq += l.pieceBoards[i] == r.pieceBoards[i];
-      }
-      eq += l.teamBoards[0] == r.teamBoards[0];
-      eq += l.teamBoards[1] == r.teamBoards[1];
-      eq += l.teamBoards[2] == r.teamBoards[2];
-
-      eq += l.kings[0] == r.kings[0];
-      eq += l.kings[1] == r.kings[1];
-
-      eq += l.pinnedSquares == r.pinnedSquares;
-      eq += l.blockMask == r.blockMask;
-      eq += l.attacks == r.attacks;
-      eq += l.numCheckers == r.numCheckers;
-      eq += l.castlingRights == r.castlingRights;
-      eq += l.enPassant == r.enPassant;
-      eq += l.turns == r.turns;
-      eq += l.whiteTurn == r.whiteTurn;
-
-      return eq == 23;
-    }*/
 };
-
+using moveCB = std::function<uint16_t(BoardState&)>;
 struct MoveList
 {
-  uint32_t move[100];
+  std::unique_ptr<moveCB> move[100];
   uint8_t end = 0;
 
-  void inline add(uint32_t newMove)
+  void inline add(std::unique_ptr<moveCB> newMove)
   {
-    move[end++] = newMove;
+    move[end++] = std::move(newMove);
   }
+
   void inline reset()
   {
     end = 0;
